@@ -19,7 +19,7 @@ VoxAI plugs a phone number and a WhatsApp line into an intelligent agent that un
 
 ---
 
-## What Is VoxAI?
+## What Is VoxAI
 
 Most businesses lose leads because their phone goes unanswered at 9 PM, their WhatsApp replies take 4 hours, and their sales team forgets to update the CRM after every call.
 
