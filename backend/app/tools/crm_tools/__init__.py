@@ -3,6 +3,7 @@ CRM Tools — callable functions the agent invokes to interact with the CRM.
 
 These bridge the agent (LangGraph nodes) to the CRM integration layer.
 Business ID is used to fetch the right credentials from the DB.
+Industry-agnostic: works for real estate, healthcare, automotive, retail, etc.
 """
 from __future__ import annotations
 import uuid
@@ -12,29 +13,18 @@ from sqlalchemy import select
 from app.core.logging import logger
 from app.integrations.crm.hubspot import CRMLead, get_crm
 from app.models.customer import Customer, Lead, LeadStatus, LeadScore
-from app.models.integration import Integration, IntegrationType, IntegrationStatus
 
 
 async def _get_crm_for_business(business_id: str, db: AsyncSession):
-    """Load the CRM integration for a business and return the provider instance."""
-    result = await db.execute(
-        select(Integration).where(
-            Integration.business_id == uuid.UUID(business_id),
-            Integration.integration_type == IntegrationType.HUBSPOT,
-            Integration.status == IntegrationStatus.CONNECTED,
-            Integration.is_active == True,
-        )
-    )
-    integration = result.scalar_one_or_none()
+    """Return real HubSpot CRM if token is configured, otherwise MockCRM."""
+    from app.core.config import settings
 
-    if integration and integration.credential:
-        # Decrypt and use real HubSpot
-        # For now: fall back to mock if no real token
-        from app.core.config import settings
-        if settings.HUBSPOT_ACCESS_TOKEN:
-            return get_crm("hubspot")
+    # Always use real HubSpot when token is present — no DB record required
+    if settings.HUBSPOT_ACCESS_TOKEN:
+        logger.info("[CRM] Using real HubSpot CRM")
+        return get_crm("hubspot")
 
-    logger.info("[CRM] No active HubSpot integration found — using MockCRM")
+    logger.info("[CRM] HUBSPOT_ACCESS_TOKEN not set — using MockCRM")
     return get_crm("mock")
 
 
@@ -70,42 +60,106 @@ async def get_or_create_customer(
     return customer
 
 
+def _score_lead(entities: dict, business_industry: str) -> LeadScore:
+    """
+    Score a lead based on urgency and budget.
+    Works for any industry — uses urgency field as the primary signal,
+    with budget as a secondary signal when present.
+    """
+    # Urgency is the most reliable cross-industry signal
+    urgency = (entities.get("urgency") or "normal").lower()
+    if urgency == "high":
+        return LeadScore.HOT
+    if urgency == "low":
+        return LeadScore.COLD
+
+    # Budget-based scoring (applies to any industry with a monetary value)
+    budget = entities.get("budget")
+    if budget:
+        try:
+            # Normalise: strip currency symbols, commas
+            budget_val = float(
+                str(budget)
+                .replace(",", "")
+                .replace("₹", "")
+                .replace("$", "")
+                .replace("L", "")
+                .strip()
+            )
+            # In lakhs or raw rupees — raw rupees ≥50L = HOT
+            if budget_val >= 5_000_000 or budget_val >= 50:
+                return LeadScore.HOT
+            if budget_val >= 2_000_000 or budget_val >= 20:
+                return LeadScore.WARM
+        except (ValueError, TypeError):
+            pass
+
+    return LeadScore.WARM  # default — any genuine inquiry is at least warm
+
+
+def _build_lead_title(entities: dict, business_industry: str) -> str:
+    """Build a human-readable lead title for any industry."""
+    service = entities.get("service_requested")
+    location = entities.get("location")
+    industry = (business_industry or "general").lower()
+
+    # Industry-specific formatting
+    if industry in ("real_estate", "property"):
+        bedrooms = entities.get("bedrooms") or entities.get("quantity")
+        prop_type = service or "Property"
+        parts = [f"{bedrooms}BHK" if bedrooms else prop_type]
+        if location:
+            parts.append(f"in {location}")
+        return " ".join(parts) + " inquiry"
+
+    if industry in ("healthcare", "clinic", "medical"):
+        parts = [service or "Medical consultation"]
+        if location:
+            parts.append(f"at {location}")
+        return " — ".join(parts)
+
+    if industry in ("automotive", "car_dealership"):
+        parts = [service or "Vehicle inquiry"]
+        if location:
+            parts.append(f"in {location}")
+        return " ".join(parts)
+
+    # Generic fallback
+    parts = [service or "Service inquiry"]
+    if location:
+        parts.append(f"({location})")
+    return " ".join(parts)
+
+
 async def create_lead(
     business_id: str,
     customer: Customer,
     entities: dict,
     db: AsyncSession,
+    business_industry: str = "general",
 ) -> dict[str, Any]:
     """
     Create a Lead in the local DB and sync to CRM.
+    Works for any industry — scoring and title are derived dynamically.
 
-    entities: {budget, location, property_type, bedrooms, ...}
-    Returns: {lead_id, crm_id, status}
+    entities: {budget, location, service_requested, quantity, urgency, ...}
+    Returns: {lead_id, crm_id, score, status}
     """
-    # Score the lead
-    score = LeadScore.COLD
-    budget = entities.get("budget")
-    if budget:
-        try:
-            budget_val = float(str(budget).replace(",", "").replace("₹", "").replace("L", "").strip())
-            if budget_val >= 50:
-                score = LeadScore.HOT
-            elif budget_val >= 20:
-                score = LeadScore.WARM
-        except (ValueError, TypeError):
-            pass
+    score = _score_lead(entities, business_industry)
 
-    # Build requirements dict
+    # Build requirements dict — store all extracted entities
     requirements = {
         k: v for k, v in entities.items()
-        if k in ("location", "property_type", "bedrooms", "area", "preferred_datetime")
-        and v is not None
+        if v is not None and k not in ("customer_name",)
     }
+
+    budget = entities.get("budget")
+    title = _build_lead_title(entities, business_industry)
 
     lead = Lead(
         business_id=uuid.UUID(business_id),
         customer_id=customer.id,
-        title=f"{entities.get('property_type', 'Property')} inquiry — {entities.get('location', 'unknown')}",
+        title=title,
         status=LeadStatus.NEW,
         score=score,
         budget=float(budget) if budget else None,
@@ -113,7 +167,7 @@ async def create_lead(
     )
     db.add(lead)
     await db.flush()
-    logger.info(f"🏠 Lead created: {lead.id} | score={score.value}")
+    logger.info(f"📋 Lead created: {lead.id} | industry={business_industry} | score={score.value}")
 
     # Sync to CRM
     crm_id: str | None = None
@@ -128,7 +182,7 @@ async def create_lead(
             requirements=requirements,
             status="NEW",
             score=score.value.upper(),
-            notes=f"Lead created by AI agent. Requirements: {requirements}",
+            notes=f"Lead created by AI agent. Industry: {business_industry}. Requirements: {requirements}",
         )
         crm_id = await crm.create_lead(crm_lead)
         lead.crm_id = crm_id
@@ -144,6 +198,7 @@ async def create_lead(
         "crm_id": crm_id,
         "score": score.value,
         "status": "created",
+        "title": title,
     }
 
 

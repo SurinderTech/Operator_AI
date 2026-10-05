@@ -3,15 +3,17 @@ AI Orchestrator — the central brain using LangGraph.
 
 Graph:
   START → receptionist → intent_classifier → router
-                                                ├─ lead_agent    → responder → END
-                                                ├─ booking_agent → responder → END
-                                                ├─ support_agent → responder → END
-                                                └─ human_handoff → END
+                                               ├─ lead_agent    → responder → END
+                                               ├─ booking_agent → responder → END
+                                               ├─ support_agent → responder → END
+                                               └─ human_handoff → END
 
-Every node now:
+Every node:
   - Uses real tool calls (CRM, Calendar, WhatsApp, RAG)
   - Persists AgentRun + ToolCall records to DB
   - Loads from and writes to customer memory
+  - Is fully industry-agnostic — works for real estate, clinics,
+    auto dealers, restaurants, salons, law firms, or any business.
 """
 from __future__ import annotations
 import json
@@ -37,6 +39,12 @@ class AgentState(TypedDict):
     customer_phone: str
     agent_run_id: str | None   # set after AgentRun row is created
 
+    # ── Business context (loaded once per call) ───────────────────────────────
+    business_name: str          # e.g. "Dr. Patel Clinic"
+    business_industry: str      # e.g. "healthcare", "real_estate", "automotive"
+    business_services: list     # e.g. ["Consultation", "X-Ray", "Blood Test"]
+    business_description: str   # free text from Business.description
+
     # ── Input ────────────────────────────────────────────────────────────────
     user_input: str
 
@@ -60,8 +68,6 @@ class AgentState(TypedDict):
     next_action: str   # continue | end_call | human_handoff
 
     # ── Runtime (injected, not part of LangGraph routing) ────────────────────
-    # We pass db as a dict key so nodes can persist without side channels.
-    # LangGraph serialises state via TypedDict; we store it as an opaque Any.
     _db: Any | None
 
 
@@ -107,16 +113,139 @@ async def _log_tool_call(
         logger.warning(f"ToolCall flush failed: {e}")
 
 
+# ── Business context helpers ──────────────────────────────────────────────────
+
+async def _load_business_context(business_id: str, db: AsyncSession) -> dict:
+    """
+    Load the Business row and return industry/name/services for prompt injection.
+    Falls back to safe defaults so no node crashes.
+    """
+    try:
+        from sqlalchemy import select
+        from app.models.business import Business
+        result = await db.execute(select(Business).where(Business.id == uuid.UUID(business_id)))
+        biz = result.scalar_one_or_none()
+        if biz:
+            return {
+                "name": biz.name or "the business",
+                "industry": (biz.industry or "general").lower().replace(" ", "_"),
+                "services": biz.services or [],
+                "description": biz.description or "",
+                "settings": biz.settings or {},
+                "team_phone": (biz.settings or {}).get("team_phone", ""),
+            }
+    except Exception as e:
+        logger.error(f"Business context load failed: {e}")
+    return {
+        "name": "the business",
+        "industry": "general",
+        "services": [],
+        "description": "",
+        "settings": {},
+        "team_phone": "",
+    }
+
+
+def _build_intent_prompt(
+    industry: str,
+    business_name: str,
+    services: list,
+    business_description: str,
+) -> str:
+    """
+    Dynamically build the intent classification prompt.
+    Works for ANY industry — the LLM infers relevant intents from context.
+    """
+    services_str = ", ".join(services) if services else "various services"
+
+    return f"""You are an intent classifier for an AI assistant working for:
+
+Business: {business_name}
+Industry: {industry}
+Services offered: {services_str}
+Description: {business_description}
+
+Classify the customer's message into ONE of these universal intents:
+- inquiry:            customer asking about services, products, availability, pricing
+- appointment_request: customer wants to book/schedule/confirm/cancel an appointment or visit
+- support:            general question, status check, how-to, FAQ
+- complaint:          expressing frustration, anger, dissatisfaction, bad experience
+- follow_up:          asking about a prior interaction, order, case, or booking
+- out_of_scope:       completely unrelated to the business
+
+Extract entities relevant to this business. Use null for anything not mentioned:
+- budget:            numeric value (raw number, or null)
+- location:          city, area, branch name (or null)
+- service_requested: specific service they want (or null)
+- quantity:          numeric quantity if mentioned (or null)
+- preferred_datetime: ISO datetime string if any date/time is mentioned (or null)
+- customer_name:     if the customer introduced themselves (or null)
+- urgency:           "high" | "normal" | "low" (default "normal")
+
+Respond ONLY with valid JSON — no markdown, no explanation:
+{{
+  "intent": "...",
+  "confidence": 0.0,
+  "entities": {{
+    "budget": null,
+    "location": null,
+    "service_requested": null,
+    "quantity": null,
+    "preferred_datetime": null,
+    "customer_name": null,
+    "urgency": "normal"
+  }},
+  "requires_escalation": false,
+  "escalation_reason": null
+}}"""
+
+
+def _build_responder_prompt(
+    industry: str,
+    business_name: str,
+) -> str:
+    """
+    Build the responder system prompt for any industry.
+    """
+    return f"""You are a warm, professional AI assistant for {business_name} ({industry}).
+You are speaking to a customer on the phone or via WhatsApp.
+
+Rules:
+- Keep responses under 3 sentences for voice (conversational, not formal).
+- Address the customer by first name if known.
+- Confirm actions that were taken (appointment booked, inquiry logged, etc.).
+- If an appointment was booked, state the exact time clearly.
+- If relevant items were found, briefly mention how many.
+- If WhatsApp was sent, mention you've sent details there.
+- Sound human, warm, and helpful — never robotic.
+- For Indian businesses, use ₹ naturally.
+- Do NOT make up information not in the context."""
+
+
 # ── Graph Nodes ───────────────────────────────────────────────────────────────
 
 async def receptionist_node(state: AgentState) -> AgentState:
     """
-    1. Load customer memory from DB.
-    2. Run RAG search over business knowledge base.
-    3. Set business_context for downstream nodes.
+    1. Load business metadata (name, industry, services).
+    2. Load customer memory from DB.
+    3. Run RAG search over business knowledge base.
+    4. Set business_context for downstream nodes.
     """
     logger.info(f"🎙️ Receptionist | input: {state['user_input'][:80]}")
     db = _db(state)
+
+    # ── Load business metadata ────────────────────────────────────────────────
+    if db:
+        biz = await _load_business_context(state["business_id"], db)
+        state["business_name"] = biz["name"]
+        state["business_industry"] = biz["industry"]
+        state["business_services"] = biz["services"]
+        state["business_description"] = biz["description"]
+    else:
+        state.setdefault("business_name", "the business")
+        state.setdefault("business_industry", "general")
+        state.setdefault("business_services", [])
+        state.setdefault("business_description", "")
 
     # ── Load customer memory ──────────────────────────────────────────────────
     if db:
@@ -158,11 +287,10 @@ async def receptionist_node(state: AgentState) -> AgentState:
 async def intent_classifier_node(state: AgentState) -> AgentState:
     """
     Classify customer intent and extract entities using Gemini Flash.
-    Produces structured JSON: intent + entities + escalation flag.
+    Fully dynamic — prompt is built from real business metadata.
     """
     llm = _llm(fast=True)
 
-    # Build a concise customer profile for the prompt
     mem = state.get("customer_memory", {})
     customer_context = ""
     if mem and not mem.get("is_new"):
@@ -172,44 +300,19 @@ async def intent_classifier_node(state: AgentState) -> AgentState:
             f"Known preferences: {json.dumps(prefs)}"
         )
 
-    system = f"""You are an intent classifier for a real estate AI assistant.
+    # Dynamic prompt based on actual business type
+    system = _build_intent_prompt(
+        industry=state.get("business_industry", "general"),
+        business_name=state.get("business_name", "the business"),
+        services=state.get("business_services", []),
+        business_description=state.get("business_description", ""),
+    )
 
-Business context (from knowledge base):
-{state.get('business_context', '')[:800]}
-
-{customer_context}
-
-Classify the customer's message into ONE intent:
-- property_inquiry: asking about properties, listings, availability
-- appointment_request: wants to schedule/book a visit or meeting
-- price_inquiry: asking about pricing, costs, payment plans
-- support: general support question, status check
-- complaint: expressing frustration, anger, dissatisfaction
-- out_of_scope: completely unrelated to the business
-
-Extract entities:
-- budget: numeric value in INR (e.g. 5000000 for 50 Lakhs). null if not mentioned.
-- location: city/area name. null if not mentioned.
-- property_type: e.g. "2BHK", "3BHK", "villa", "commercial". null if not mentioned.
-- bedrooms: integer. null if not mentioned.
-- preferred_datetime: ISO string if date/time mentioned. null otherwise.
-- customer_name: name if introduced themselves. null otherwise.
-
-Respond ONLY with valid JSON — no markdown, no explanation:
-{{
-  "intent": "...",
-  "confidence": 0.0,
-  "entities": {{
-    "budget": null,
-    "location": null,
-    "property_type": null,
-    "bedrooms": null,
-    "preferred_datetime": null,
-    "customer_name": null
-  }},
-  "requires_escalation": false,
-  "escalation_reason": null
-}}"""
+    # Append business RAG context and returning customer info
+    if state.get("business_context"):
+        system += f"\n\nBusiness knowledge context:\n{state['business_context'][:800]}"
+    if customer_context:
+        system += f"\n\n{customer_context}"
 
     history_str = json.dumps(state.get("conversation_history", [])[-6:], indent=2)
     prompt = f"Conversation history:\n{history_str}\n\nCustomer message: {state['user_input']}"
@@ -247,41 +350,43 @@ Respond ONLY with valid JSON — no markdown, no explanation:
 
 async def lead_agent_node(state: AgentState) -> AgentState:
     """
-    Handles property_inquiry / price_inquiry:
-    1. Search properties in knowledge base
+    Handles inquiry intent for ANY business type:
+    1. Search knowledge base for relevant info
     2. Get or create customer
     3. Create lead in DB + CRM
-    4. Send WhatsApp property cards
-    5. Notify team if hot lead
+    4. Send WhatsApp info to customer
+    5. Notify team if high-urgency / hot lead
     """
-    logger.info(f"🏠 Lead Agent | intent={state['intent']}")
+    logger.info(f"📋 Lead Agent | industry={state.get('business_industry')} intent={state['intent']}")
     db = _db(state)
     tool_results: dict = {}
     entities = state.get("entities", {})
     t0 = time.monotonic()
 
-    # ── 1. Search properties ──────────────────────────────────────────────────
+    # ── 1. Search knowledge base ──────────────────────────────────────────────
     if db:
         try:
-            from app.tools.search_tools import search_properties
-            search_result = await search_properties(
-                query=state["user_input"],
+            from app.tools.search_tools import search_knowledge
+            # Build a rich query from entities for any business type
+            query_parts = [state["user_input"]]
+            if entities.get("service_requested"):
+                query_parts.append(entities["service_requested"])
+            if entities.get("location"):
+                query_parts.append(entities["location"])
+            enriched_query = " ".join(query_parts)
+
+            search_result = await search_knowledge(
+                query=enriched_query,
                 business_id=state["business_id"],
                 db=db,
-                filters={
-                    "location": entities.get("location"),
-                    "bedrooms": entities.get("bedrooms"),
-                    "budget": entities.get("budget"),
-                    "property_type": entities.get("property_type"),
-                },
+                top_k=5,
             )
-            tool_results["properties"] = {
+            tool_results["knowledge"] = {
                 "found": search_result["found"],
-                "count": len(search_result["properties"]),
-                "items": search_result["properties"],
-                "context": search_result["context"][:500],
+                "count": len(search_result["results"]),
+                "context": search_result["context"][:600],
+                "items": search_result["results"][:3],
             }
-            # Enrich business context with property results
             if search_result["context"]:
                 state["business_context"] = (
                     state.get("business_context", "") + "\n\n" + search_result["context"]
@@ -289,13 +394,14 @@ async def lead_agent_node(state: AgentState) -> AgentState:
             if state.get("agent_run_id"):
                 latency = int((time.monotonic() - t0) * 1000)
                 await _log_tool_call(
-                    state["agent_run_id"], "search_properties",
-                    {"query": state["user_input"], "filters": entities},
-                    tool_results["properties"], "success", latency, db,
+                    state["agent_run_id"], "search_knowledge",
+                    {"query": enriched_query},
+                    {"found": search_result["found"], "count": len(search_result["results"])},
+                    "success", latency, db,
                 )
         except Exception as e:
-            logger.error(f"search_properties failed: {e}")
-            tool_results["properties"] = {"found": False, "error": str(e)}
+            logger.error(f"search_knowledge failed: {e}")
+            tool_results["knowledge"] = {"found": False, "error": str(e)}
 
     # ── 2. Get/create customer ────────────────────────────────────────────────
     customer = None
@@ -321,6 +427,7 @@ async def lead_agent_node(state: AgentState) -> AgentState:
                 customer=customer,
                 entities=entities,
                 db=db,
+                business_industry=state.get("business_industry", "general"),
             )
             tool_results["lead"] = lead_result
             if state.get("agent_run_id"):
@@ -334,37 +441,55 @@ async def lead_agent_node(state: AgentState) -> AgentState:
             logger.error(f"create_lead failed: {e}")
             tool_results["lead"] = {"status": "error", "detail": str(e)}
 
-    # ── 4. Send WhatsApp property cards ───────────────────────────────────────
+    # ── 4. Send WhatsApp info to customer ─────────────────────────────────────
     if customer:
         try:
-            from app.tools.communication_tools import send_lead_whatsapp
-            properties = tool_results.get("properties", {}).get("items", [])
-            wa_result = await send_lead_whatsapp(customer=customer, properties=properties)
+            from app.tools.communication_tools import send_inquiry_whatsapp
+            knowledge_items = tool_results.get("knowledge", {}).get("items", [])
+            wa_result = await send_inquiry_whatsapp(
+                customer=customer,
+                items=knowledge_items,
+                business_name=state.get("business_name", ""),
+                industry=state.get("business_industry", "general"),
+            )
             tool_results["whatsapp"] = wa_result
         except Exception as e:
             logger.error(f"WhatsApp send failed: {e}")
             tool_results["whatsapp"] = {"status": "error"}
 
-    # ── 5. Team alert for hot leads ───────────────────────────────────────────
-    if (
-        customer
-        and tool_results.get("lead", {}).get("score") == "hot"
-        and settings.TWILIO_WHATSAPP_NUMBER
-    ):
+    # ── 5. Team alert for hot/urgent leads ────────────────────────────────────
+    lead_score = tool_results.get("lead", {}).get("score", "")
+    urgency = entities.get("urgency", "normal")
+    if customer and (lead_score == "hot" or urgency == "high"):
         try:
-            from app.tools.communication_tools import notify_team_new_lead
-            from app.models.customer import Lead
-            from sqlalchemy import select
-            lead_id = tool_results.get("lead", {}).get("lead_id")
-            if lead_id:
-                r = await db.execute(
-                    select(Lead).where(Lead.id == uuid.UUID(lead_id))  # type: ignore[arg-type]
+            # Pull team phone from: business.settings.team_phone → env fallback
+            if db:
+                biz_ctx = await _load_business_context(state["business_id"], db)
+                team_phone = biz_ctx.get("team_phone") or settings.TEAM_WHATSAPP_PHONE or ""
+            else:
+                team_phone = settings.TEAM_WHATSAPP_PHONE or ""
+
+            if team_phone:
+                from app.tools.communication_tools import notify_team_new_lead
+                from app.models.customer import Lead
+                from sqlalchemy import select as sa_select
+                lead_id = tool_results.get("lead", {}).get("lead_id")
+                lead_obj = None
+                if lead_id and db:
+                    r = await db.execute(
+                        sa_select(Lead).where(Lead.id == uuid.UUID(lead_id))
+                    )
+                    lead_obj = r.scalar_one_or_none()
+
+                await notify_team_new_lead(
+                    team_phone=team_phone,
+                    customer=customer,
+                    lead=lead_obj,
+                    entities=entities,
+                    business_name=state.get("business_name", ""),
+                    industry=state.get("business_industry", "general"),
                 )
-                lead_obj = r.scalar_one_or_none()
-                if lead_obj:
-                    # Use business phone as team notification target
-                    # In production: fetch from business.settings
-                    pass  # team_phone not yet configured per-business
+                logger.info(f"🔔 Team alert sent to {team_phone}")
         except Exception as e:
             logger.error(f"Team alert failed: {e}")
 
@@ -382,7 +507,7 @@ async def lead_agent_node(state: AgentState) -> AgentState:
 
 async def booking_agent_node(state: AgentState) -> AgentState:
     """
-    Handles appointment_request:
+    Handles appointment_request for ANY business type:
     1. Get available calendar slots
     2. Create appointment (Calendar + DB)
     3. Update CRM lead stage
@@ -432,17 +557,18 @@ async def booking_agent_node(state: AgentState) -> AgentState:
         try:
             from app.tools.calendar_tools import create_appointment
             t1 = time.monotonic()
-            # Pick first slot (or preferred slot if datetime extracted)
             best_slot = slots[0]
             customer_name = customer.full_name or customer.phone
+            service = entities.get("service_requested") or state.get("business_industry", "Service")
             appt_result = await create_appointment(
                 business_id=state["business_id"],
                 customer=customer,
                 slot_start=best_slot["start"],
-                title=f"Property Visit — {customer_name}",
+                title=f"{service.title()} — {customer_name}",
                 duration_minutes=60,
                 description=(
-                    f"Property requirements: {json.dumps(entities)}\n"
+                    f"Service: {service}\n"
+                    f"Customer requirements: {json.dumps(entities)}\n"
                     f"Conversation: {state['user_input'][:200]}"
                 ),
                 db=db,
@@ -451,7 +577,7 @@ async def booking_agent_node(state: AgentState) -> AgentState:
             if state.get("agent_run_id") and db:
                 await _log_tool_call(
                     state["agent_run_id"], "create_appointment",
-                    {"slot": best_slot["start"], "customer": customer_name},
+                    {"slot": best_slot["start"], "customer": customer_name, "service": service},
                     appt_result, "success", int((time.monotonic() - t1) * 1000), db,
                 )
         except Exception as e:
@@ -462,15 +588,14 @@ async def booking_agent_node(state: AgentState) -> AgentState:
     if db:
         try:
             from app.tools.crm_tools import create_lead, update_lead_stage
-            # Get or create lead
             lead_result = await create_lead(
                 business_id=state["business_id"],
                 customer=customer,
                 entities=entities,
                 db=db,
+                business_industry=state.get("business_industry", "general"),
             )
             tool_results["lead"] = lead_result
-            # Advance to QUALIFIED
             if lead_result.get("lead_id"):
                 await update_lead_stage(
                     business_id=state["business_id"],
@@ -496,6 +621,8 @@ async def booking_agent_node(state: AgentState) -> AgentState:
                     if "," in appt.get("start_label", "") else appt.get("start_label", ""),
                     "location": "Our office (we'll send details)",
                     "meet_link": appt.get("meet_link"),
+                    "service": entities.get("service_requested", ""),
+                    "business_name": state.get("business_name", ""),
                 },
             )
             tool_results["whatsapp"] = wa_result
@@ -508,7 +635,7 @@ async def booking_agent_node(state: AgentState) -> AgentState:
 
 async def support_agent_node(state: AgentState) -> AgentState:
     """
-    Handles support / complaint / out_of_scope:
+    Handles support / complaint / follow_up / out_of_scope for any business:
     Searches the knowledge base for answers (FAQs, policies, pricing).
     """
     logger.info(f"🛠️ Support Agent | intent={state['intent']}")
@@ -550,6 +677,7 @@ async def responder_node(state: AgentState) -> AgentState:
     """
     Generate the final spoken/text response to the customer.
     Uses full context: intent, entities, tool results, business context.
+    Fully industry-agnostic.
     """
     llm = _llm(fast=True)
 
@@ -560,36 +688,29 @@ async def responder_node(state: AgentState) -> AgentState:
         or "there"
     )
 
-    # Summarise what actions were taken
+    # Summarise what actions were taken (generic for any business)
     actions_summary = []
     tr = state.get("tool_results", {})
     if tr.get("lead", {}).get("status") == "created":
-        actions_summary.append(f"Lead created (score: {tr['lead'].get('score', '?')})")
+        actions_summary.append(f"Inquiry logged (score: {tr['lead'].get('score', '?')})")
     if tr.get("appointment", {}).get("status") == "confirmed":
         actions_summary.append(f"Appointment booked for {tr['appointment'].get('start_label', '?')}")
     if tr.get("whatsapp", {}).get("status") == "sent":
         actions_summary.append("WhatsApp message sent to customer")
-    if tr.get("properties", {}).get("found"):
-        actions_summary.append(f"Found {tr['properties']['count']} matching properties")
+    if tr.get("knowledge", {}).get("found"):
+        actions_summary.append("Found relevant information from knowledge base")
 
-    system = """You are a warm, professional AI real estate assistant speaking to a customer on the phone.
-
-Rules:
-- Keep responses under 3 sentences for voice (conversational, not formal).
-- Address the customer by first name if known.
-- Confirm actions that were taken (appointment booked, properties found, etc.).
-- If an appointment was booked, state the exact time clearly.
-- If properties were found, briefly mention how many.
-- If WhatsApp was sent, mention you've sent details there.
-- Sound human, warm, and helpful — not robotic.
-- In India, use ₹ and Lakhs for currency naturally."""
+    system = _build_responder_prompt(
+        industry=state.get("business_industry", "general"),
+        business_name=state.get("business_name", "the business"),
+    )
 
     prompt = f"""Customer name: {customer_name}
 Customer said: "{state['user_input']}"
 Intent: {state['intent']}
 Entities extracted: {json.dumps(state.get('entities', {}), indent=2)}
 Actions taken: {', '.join(actions_summary) if actions_summary else 'None yet'}
-Business context available: {state.get('business_context', '')[:400]}
+Business context available: {state.get('business_context', '')[:500]}
 
 Generate a natural, conversational response (max 3 sentences for voice):"""
 
@@ -615,7 +736,7 @@ async def human_handoff_node(state: AgentState) -> AgentState:
     """
     Escalation node:
     1. Creates HumanHandoff DB record
-    2. Notifies team via WhatsApp
+    2. Notifies team via WhatsApp (using business.settings.team_phone)
     3. Responds to customer with hold message
     """
     logger.warning(f"🚨 Human handoff | reason: {state.get('escalation_reason')}")
@@ -658,8 +779,17 @@ async def human_handoff_node(state: AgentState) -> AgentState:
         except Exception as e:
             logger.error(f"HumanHandoff creation failed: {e}")
 
-    # ── Notify team ───────────────────────────────────────────────────────────
-    team_phone = (settings.TEAM_WHATSAPP_PHONE or settings.TWILIO_WHATSAPP_NUMBER).strip()
+    # ── Notify team — pull phone from business settings first ─────────────────
+    team_phone = ""
+    if db:
+        try:
+            biz_ctx = await _load_business_context(state["business_id"], db)
+            team_phone = biz_ctx.get("team_phone", "")
+        except Exception:
+            pass
+    if not team_phone:
+        team_phone = (settings.TEAM_WHATSAPP_PHONE or settings.TWILIO_WHATSAPP_NUMBER).strip()
+
     if customer and team_phone:
         try:
             from app.tools.communication_tools import notify_human_handoff
@@ -669,12 +799,14 @@ async def human_handoff_node(state: AgentState) -> AgentState:
                 reason=state.get("escalation_reason") or "Customer requested human",
                 conversation_summary=conversation_summary,
                 entities=state.get("entities", {}),
+                business_name=state.get("business_name", ""),
+                industry=state.get("business_industry", "general"),
             )
         except Exception as e:
             logger.error(f"Team handoff notification failed: {e}")
 
     state["response"] = (
-        "I completely understand. Let me connect you with one of our senior advisors "
+        "I completely understand. Let me connect you with one of our team members "
         "right now — they have your full conversation details and will be with you "
         "in just a moment. Thank you for your patience."
     )
@@ -690,11 +822,17 @@ def route_by_intent(
     if state.get("escalate"):
         return "human_handoff"
     intent = state.get("intent", "support")
-    if intent in ("property_inquiry", "price_inquiry"):
+    if intent == "inquiry":
         return "lead_agent"
     elif intent == "appointment_request":
         return "booking_agent"
+    elif intent in ("complaint",):
+        # Complaints can escalate or go to support depending on severity
+        if state.get("escalate"):
+            return "human_handoff"
+        return "support_agent"
     else:
+        # support, follow_up, out_of_scope, unknown
         return "support_agent"
 
 
@@ -783,6 +921,10 @@ async def process_customer_input(
         "user_input": user_input,
         "conversation_history": conversation_history or [],
         "customer_memory": customer_memory or {},
+        "business_name": "",
+        "business_industry": "general",
+        "business_services": [],
+        "business_description": "",
         "business_context": "",
         "intent": "",
         "entities": {},

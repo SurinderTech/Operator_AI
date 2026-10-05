@@ -24,6 +24,8 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan -- startup and shutdown."""
+    import os
+    import json
     from app.core.logging import logger
     from app.core.redis import get_redis, close_redis
     print(f"\n{'='*60}")
@@ -36,11 +38,53 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     await init_db()
     await get_redis()   # warm-up Redis (logs warning if down, does NOT crash)
+
+    # ── Google Calendar config diagnostics (safe — no secrets logged) ──
+    # NOTE: pydantic-settings populates the Settings object from .env.
+    # We read from settings first, with os.environ fallback.
+    _gcal_creds_raw = settings.GOOGLE_CALENDAR_CREDENTIALS_JSON.strip() \
+                      or os.environ.get("GOOGLE_CALENDAR_CREDENTIALS_JSON", "").strip()
+    _gcal_token_raw = settings.GOOGLE_CALENDAR_TOKEN_JSON.strip() \
+                      or os.environ.get("GOOGLE_CALENDAR_TOKEN_JSON", "").strip()
+    _gcal_redirect  = settings.GOOGLE_CALENDAR_REDIRECT_URI.strip() \
+                      or os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI", "") \
+                      or "http://localhost:8000/api/v1/auth/google/callback"
+
+    _creds_valid = False
+    if _gcal_creds_raw:
+        try:
+            _outer = json.loads(_gcal_creds_raw)
+            _client = _outer.get("web") or _outer.get("installed")
+            _creds_valid = bool(_client and _client.get("client_id") and _client.get("client_secret"))
+        except Exception:
+            pass
+
+    _token_valid = False
+    if _gcal_token_raw:
+        try:
+            _t = json.loads(_gcal_token_raw)
+            _token_valid = bool(_t.get("refresh_token"))
+        except Exception:
+            pass
+
+    print(f"  [GCAL]  GOOGLE_CALENDAR_CREDENTIALS_JSON configured: {_creds_valid}")
+    print(f"  [GCAL]  GOOGLE_CALENDAR_TOKEN_JSON configured:        {_token_valid}")
+    print(f"  [GCAL]  Redirect URI: {_gcal_redirect}")
+    if not _creds_valid:
+        print(f"  [GCAL]  WARNING: Credentials not loaded — check GOOGLE_CALENDAR_CREDENTIALS_JSON in .env")
+    if _creds_valid and not _token_valid:
+        print(f"  [GCAL]  INFO: Token not set — open http://localhost:8000/api/v1/auth/google/calendar to authorize")
+    if _creds_valid and _token_valid:
+        print(f"  [GCAL]  OK: Google Calendar fully configured — real calendar will be used")
+    print()
+
+
     print("[OK] Backend ready -- waiting for requests...\n")
     yield
     await close_redis()
     logger.info("Shutting down AI Business Employee")
     print("\n[STOP] Backend shutdown complete.\n")
+
 
 
 app = FastAPI(

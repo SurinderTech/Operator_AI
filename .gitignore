@@ -5,6 +5,12 @@
 *.env
 !.env.example   # keep the example template
 
+# ─── Google OAuth token files (NEVER commit these) ────────────────────────────
+google_token.json
+google_credentials.json
+token.json
+
+
 # ─── Python / Backend ─────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]

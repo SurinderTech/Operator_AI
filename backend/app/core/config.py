@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     GOOGLE_CALENDAR_CREDENTIALS_JSON: str = ""
     GOOGLE_CALENDAR_TOKEN_JSON: str = ""
     GOOGLE_CALENDAR_ID: str = "primary"
+    # Explicit redirect URI override — leave blank to auto-detect from APP_ENV.
+    # LOCAL:      http://localhost:8000/api/v1/auth/google/callback
+    # PRODUCTION: https://growthos-5-pbof.onrender.com/api/v1/auth/google/callback
+    GOOGLE_CALENDAR_REDIRECT_URI: str = ""
 
     # ── Brevo (Email) ─────────────────────────────────────────────────
     BREVO_API_KEY: str = ""

@@ -1,24 +1,77 @@
 """Google Calendar integration — check availability and book appointments."""
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from app.core.logging import logger
 
 
+def _build_credentials(credentials_json: str, token_json: str):
+    """
+    Build a google.oauth2.credentials.Credentials object from the stored
+    authorized-user token JSON.
+
+    Auto-refresh behaviour:
+    - If the access token is expired, google-auth will use the refresh_token
+      to obtain a new one automatically when the first API call is made.
+    - credentials_json (the OAuth client config) is only needed if we want
+      to explicitly call creds.refresh(Request()) — the client_id and
+      client_secret are already embedded inside the token_json after the
+      OAuth callback, so auto-refresh works without credentials_json.
+    """
+    from google.oauth2.credentials import Credentials
+
+    try:
+        token_data = json.loads(token_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"GOOGLE_CALENDAR_TOKEN_JSON is not valid JSON: {exc}") from exc
+
+    required = {"token", "refresh_token", "token_uri", "client_id", "client_secret"}
+    missing = required - token_data.keys()
+    if missing:
+        raise ValueError(
+            f"GOOGLE_CALENDAR_TOKEN_JSON is missing required fields: {missing}. "
+            "Re-run the OAuth flow at /api/v1/auth/google/calendar"
+        )
+
+    creds = Credentials(
+        token=token_data["token"],
+        refresh_token=token_data["refresh_token"],
+        token_uri=token_data["token_uri"],
+        client_id=token_data["client_id"],
+        client_secret=token_data["client_secret"],
+        scopes=token_data.get("scopes", ["https://www.googleapis.com/auth/calendar"]),
+    )
+    return creds
+
+
+def _refresh_if_needed(creds):
+    """
+    Explicitly refresh credentials if expired or expiring soon.
+    google-auth refreshes lazily on first API call, but this makes
+    errors surface earlier and produces better log messages.
+    """
+    if creds.expired and creds.refresh_token:
+        import google.auth.transport.requests as google_requests
+        try:
+            creds.refresh(google_requests.Request())
+            logger.info("[GCal] Access token refreshed successfully.")
+        except Exception as exc:
+            logger.error("[GCal] Token refresh failed: %s", exc)
+            raise
+    return creds
+
+
 class GoogleCalendarIntegration:
     def __init__(self, credentials_json: str, token_json: str):
-        self.credentials_json = credentials_json
+        self.credentials_json = credentials_json  # retained for compatibility
         self.token_json = token_json
         self._service = None
 
     def _get_service(self):
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
-        import json
 
-        creds = Credentials.from_authorized_user_info(
-            json.loads(self.token_json),
-            scopes=["https://www.googleapis.com/auth/calendar"],
-        )
+        creds = _build_credentials(self.credentials_json, self.token_json)
+        creds = _refresh_if_needed(creds)
         return build("calendar", "v3", credentials=creds)
 
     async def get_available_slots(

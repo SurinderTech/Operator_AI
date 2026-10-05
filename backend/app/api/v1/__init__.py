@@ -1,6 +1,7 @@
 """API v1 router — aggregates all sub-routers."""
 from fastapi import APIRouter
 from app.api.v1.auth import router as auth_router
+from app.api.v1.auth.google_calendar import router as gcal_oauth_router
 from app.api.v1.businesses import router as businesses_router
 from app.api.v1.agents import router as agents_router
 from app.api.v1.calls import router as calls_router
@@ -14,6 +15,7 @@ from app.api.v1.knowledge import router as knowledge_router
 router = APIRouter()
 
 router.include_router(auth_router,          prefix="/auth",          tags=["Auth"])
+router.include_router(gcal_oauth_router,    prefix="/auth",          tags=["Google Calendar OAuth"])
 router.include_router(businesses_router,    prefix="/businesses",    tags=["Businesses"])
 router.include_router(agents_router,        prefix="/agents",        tags=["Agents"])
 router.include_router(calls_router,         prefix="/calls",         tags=["Calls"])

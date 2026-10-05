@@ -115,13 +115,25 @@ async def public_lead_list(
 
 
 def _requirement_label(req: dict) -> str:
-    """Build a human-readable requirement string from the requirements dict."""
+    """
+    Build a human-readable requirement string from the requirements dict.
+    Works for any industry — reads whichever entity fields are present.
+    """
+    if not req:
+        return "—"
     parts = []
-    if req.get("property_type"):
-        parts.append(str(req["property_type"]))
+    # Prefer service_requested (generic) then fall back to property_type (real estate legacy)
+    service = req.get("service_requested") or req.get("property_type")
+    if service:
+        parts.append(str(service))
     if req.get("location"):
         parts.append(str(req["location"]))
+    if req.get("quantity"):
+        parts.append(f"qty {req['quantity']}")
+    if req.get("bedrooms"):
+        parts.append(f"{req['bedrooms']}BHK")
     return ", ".join(parts) if parts else "—"
+
 
 
 # ── Auth-protected ────────────────────────────────────────────────────────────

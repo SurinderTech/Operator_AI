@@ -18,13 +18,22 @@ const statusColor: Record<string, string> = {
 };
 
 const intentIcon: Record<string, string> = {
-  property_inquiry:    "🏠",
+  // Universal intents (current)
+  inquiry:             "📋",
   appointment_request: "📅",
-  price_inquiry:       "💰",
   support:             "🛠️",
   complaint:           "⚠️",
+  follow_up:           "🔄",
   out_of_scope:        "❓",
+  // Legacy real-estate intents (backward compat)
+  property_inquiry:    "🏠",
+  price_inquiry:       "💰",
 };
+
+/** Return icon for any intent string, with a sensible fallback. */
+function getIntentIcon(intent: string): string {
+  return intentIcon[intent] ?? "🤖";
+}
 
 const toolIcon: Record<string, string> = {
   search_knowledge:      "🔍",
@@ -155,7 +164,7 @@ export default function AgentLogs() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
                       <span className="text-lg flex-shrink-0 mt-0.5">
-                        {intentIcon[run.intent ?? ""] ?? "🤖"}
+                        {getIntentIcon(run.intent ?? "")}
                       </span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 mb-1">

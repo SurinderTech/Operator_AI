@@ -1,13 +1,19 @@
-﻿"use client";
+"use client";
 
-import { useState } from "react";
-import { Save, Eye, EyeOff, Building2, Clock, Bot, Bell, Shield, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Save, Eye, EyeOff, Building2, Clock, Bot, Bell, Shield, RefreshCw, Phone } from "lucide-react";
+import {
+  fetchBusinessProfile,
+  updateBusinessProfile,
+  type BusinessProfile,
+} from "@/lib/api";
 
 interface SettingsState {
   businessName: string;
   businessType: string;
   phone: string;
   whatsapp: string;
+  teamPhone: string;       // ← team WhatsApp for hot-lead alerts + escalations
   timezone: string;
   workingStart: string;
   workingEnd: string;
@@ -22,7 +28,14 @@ interface SettingsState {
   notifyDailyReport: boolean;
 }
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_KEYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+const DAYS     = ["Mon",    "Tue",     "Wed",       "Thu",      "Fri",    "Sat",      "Sun"];
+
+const INDUSTRIES = [
+  "Real Estate", "Healthcare / Clinic", "Automotive", "Insurance",
+  "Legal / Law Firm", "Salon / Spa", "Fitness / Gym", "Restaurant / Food",
+  "Retail / E-commerce", "Finance / Banking", "Education", "Other",
+];
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -35,26 +48,52 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
+function Field({ label, id, hint, children }: { label: string; id: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
       <label htmlFor={id} className="block text-xs mb-1.5 font-medium" style={{ color: "rgba(226,232,240,0.55)" }}>
         {label}
       </label>
       {children}
+      {hint && <p className="text-xs mt-1" style={{ color: "rgba(226,232,240,0.3)" }}>{hint}</p>}
     </div>
   );
 }
 
+/** Convert backend working_hours to day strings e.g. ["Mon","Tue",...] */
+function parseWorkingDays(wh: Record<string, { open: string | null; close: string | null }> | undefined): string[] {
+  if (!wh) return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return DAY_KEYS
+    .filter((k) => wh[k]?.open)
+    .map((k) => DAYS[DAY_KEYS.indexOf(k)]);
+}
+
+/** Convert selected day abbreviations back to the backend working_hours format */
+function buildWorkingHours(
+  selectedDays: string[],
+  open: string,
+  close: string,
+): Record<string, { open: string | null; close: string | null }> {
+  const result: Record<string, { open: string | null; close: string | null }> = {};
+  DAY_KEYS.forEach((key, i) => {
+    const abbr = DAYS[i];
+    result[key] = selectedDays.includes(abbr)
+      ? { open, close }
+      : { open: null, close: null };
+  });
+  return result;
+}
+
 export default function Settings() {
   const [settings, setSettings] = useState<SettingsState>({
-    businessName: "ABC Realty Pvt. Ltd.",
+    businessName: "",
     businessType: "Real Estate",
-    phone: "+91-9876543210",
-    whatsapp: "+91-9876543210",
+    phone: "",
+    whatsapp: "",
+    teamPhone: "",
     timezone: "Asia/Kolkata",
     workingStart: "09:00",
-    workingEnd: "21:00",
+    workingEnd: "20:00",
     workingDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     agentName: "Priya",
     agentPersonality: "professional_friendly",
@@ -68,7 +107,44 @@ export default function Settings() {
 
   const [showSecrets, setShowSecrets] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"business" | "agent" | "credentials" | "notifications">("business");
+
+  // ── Load live business profile on mount ────────────────────────────────────
+  const loadProfile = useCallback(async () => {
+    try {
+      const p: BusinessProfile = await fetchBusinessProfile();
+      const wh = p.working_hours ?? {};
+      const days = parseWorkingDays(wh);
+      const firstOpen  = Object.values(wh).find((d) => d.open)?.open  ?? "09:00";
+      const firstClose = Object.values(wh).find((d) => d.close)?.close ?? "20:00";
+      const bSettings = (p.settings ?? {}) as Record<string, unknown>;
+
+      setSettings((prev) => ({
+        ...prev,
+        businessName:  p.name        ?? prev.businessName,
+        businessType:  p.industry    ?? prev.businessType,
+        phone:         p.phone       ?? prev.phone,
+        timezone:      p.timezone    ?? prev.timezone,
+        workingDays:   days,
+        workingStart:  firstOpen,
+        workingEnd:    firstClose,
+        teamPhone:     (bSettings["team_phone"] as string) ?? prev.teamPhone,
+        // Persist agent settings from business.settings if stored there
+        agentName:        (bSettings["agent_name"]        as string) ?? prev.agentName,
+        agentPersonality: (bSettings["agent_personality"] as string) ?? prev.agentPersonality,
+        agentLanguage:    (bSettings["agent_language"]    as string) ?? prev.agentLanguage,
+      }));
+    } catch {
+      // Backend not up yet — keep defaults
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadProfile(); }, [loadProfile]);
 
   const set = <K extends keyof SettingsState>(key: K, value: SettingsState[K]) =>
     setSettings((p) => ({ ...p, [key]: value }));
@@ -78,9 +154,39 @@ export default function Settings() {
       ? settings.workingDays.filter((d) => d !== day)
       : [...settings.workingDays, day]);
 
-  const save = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // ── Save to backend ────────────────────────────────────────────────────────
+  const save = async () => {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateBusinessProfile({
+        name:     settings.businessName,
+        industry: settings.businessType,
+        phone:    settings.phone || undefined,
+        timezone: settings.timezone,
+        working_hours: buildWorkingHours(
+          settings.workingDays,
+          settings.workingStart,
+          settings.workingEnd,
+        ),
+        settings: {
+          team_phone:        settings.teamPhone,
+          agent_name:        settings.agentName,
+          agent_personality: settings.agentPersonality,
+          agent_language:    settings.agentLanguage,
+          max_call_duration: settings.maxCallDuration,
+          notify_escalation: settings.notifyEscalation,
+          notify_new_lead:   settings.notifyNewLead,
+          notify_daily_report: settings.notifyDailyReport,
+        },
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      setSaveError("Save failed — check backend is running.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tabs = [
@@ -90,12 +196,11 @@ export default function Settings() {
     { id: "notifications", label: "Notifications",     Icon: Bell      },
   ] as const;
 
-  // Masked credential strings -- using ASCII hyphens, no special chars
-  const maskedSid   = "AC" + "-".repeat(32);
-  const maskedToken = "-".repeat(32);
+  // Masked credential strings
+  const maskedSid     = "AC" + "-".repeat(32);
+  const maskedToken   = "-".repeat(32);
   const maskedHubspot = "pat-na-" + "-".repeat(28);
   const maskedGemini  = "AIzaSy" + "-".repeat(25);
-
   const revealedSid     = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
   const revealedToken   = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
   const revealedHubspot = "pat-na-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
@@ -111,19 +216,28 @@ export default function Settings() {
             Configure your AI employee, business hours, and integrations
           </p>
         </div>
-        <button
-          id="settings-save-btn"
-          onClick={save}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300"
-          style={{
-            background: saved ? "rgba(34,211,160,0.2)" : "linear-gradient(135deg,#4f6eff,#22d3a0)",
-            color: saved ? "#22d3a0" : "#fff",
-            border: saved ? "1px solid rgba(34,211,160,0.4)" : "none",
-            boxShadow: saved ? "none" : "0 0 20px rgba(79,110,255,0.3)",
-          }}
-        >
-          {saved ? <><RefreshCw size={14} /> Saved!</> : <><Save size={14} /> Save Changes</>}
-        </button>
+        <div className="flex items-center gap-3">
+          {saveError && (
+            <span className="text-xs" style={{ color: "#ef4444" }}>{saveError}</span>
+          )}
+          <button
+            id="settings-save-btn"
+            onClick={save}
+            disabled={saving || loading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-300"
+            style={{
+              background: saved ? "rgba(34,211,160,0.2)" : "linear-gradient(135deg,#4f6eff,#22d3a0)",
+              color: saved ? "#22d3a0" : "#fff",
+              border: saved ? "1px solid rgba(34,211,160,0.4)" : "none",
+              boxShadow: saved ? "none" : "0 0 20px rgba(79,110,255,0.3)",
+              opacity: saving || loading ? 0.6 : 1,
+            }}
+          >
+            {saving ? <><RefreshCw size={14} className="animate-spin" /> Saving…</> :
+             saved   ? <><RefreshCw size={14} /> Saved!</>                          :
+                       <><Save size={14} /> Save Changes</>}
+          </button>
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -146,7 +260,13 @@ export default function Settings() {
         ))}
       </div>
 
-      {/* Business Profile */}
+      {loading && (
+        <div className="text-xs" style={{ color: "rgba(226,232,240,0.4)" }}>
+          Loading business profile…
+        </div>
+      )}
+
+      {/* ── Business Profile ── */}
       {activeTab === "business" && (
         <div className="grid grid-cols-2 gap-6">
           <div className="glass-card p-6 space-y-5">
@@ -157,21 +277,35 @@ export default function Settings() {
               <input id="settings-business-name" value={settings.businessName}
                 onChange={(e) => set("businessName", e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="Business Type" id="settings-business-type">
+            <Field
+              label="Industry / Business Type"
+              id="settings-business-type"
+              hint="The AI agent's intent classifier adapts to this industry automatically."
+            >
               <select id="settings-business-type" value={settings.businessType}
                 onChange={(e) => set("businessType", e.target.value)} style={inputStyle}>
-                {["Real Estate", "Healthcare", "Insurance", "Retail", "Services", "Other"].map((t) => (
-                  <option key={t}>{t}</option>
-                ))}
+                {INDUSTRIES.map((t) => <option key={t}>{t}</option>)}
               </select>
             </Field>
             <Field label="Business Phone" id="settings-phone">
               <input id="settings-phone" value={settings.phone}
                 onChange={(e) => set("phone", e.target.value)} style={inputStyle} />
             </Field>
-            <Field label="WhatsApp Number" id="settings-whatsapp">
-              <input id="settings-whatsapp" value={settings.whatsapp}
-                onChange={(e) => set("whatsapp", e.target.value)} style={inputStyle} />
+            <Field
+              label="Team WhatsApp Number (for hot-lead & escalation alerts)"
+              id="settings-team-phone"
+              hint="This number receives instant WhatsApp alerts when the AI creates a hot lead or escalates to a human. Include country code, e.g. +919876543210"
+            >
+              <div style={{ position: "relative" }}>
+                <Phone size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "rgba(226,232,240,0.4)", pointerEvents: "none" }} />
+                <input
+                  id="settings-team-phone"
+                  value={settings.teamPhone}
+                  placeholder="+919876543210"
+                  onChange={(e) => set("teamPhone", e.target.value)}
+                  style={{ ...inputStyle, paddingLeft: 30 }}
+                />
+              </div>
             </Field>
           </div>
 
@@ -182,7 +316,7 @@ export default function Settings() {
             <Field label="Timezone" id="settings-timezone">
               <select id="settings-timezone" value={settings.timezone}
                 onChange={(e) => set("timezone", e.target.value)} style={inputStyle}>
-                {["Asia/Kolkata", "America/New_York", "Europe/London", "Asia/Dubai", "Asia/Singapore"].map((t) => (
+                {["Asia/Kolkata", "America/New_York", "Europe/London", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo"].map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
@@ -221,7 +355,7 @@ export default function Settings() {
         </div>
       )}
 
-      {/* AI Agent */}
+      {/* ── AI Agent ── */}
       {activeTab === "agent" && (
         <div className="grid grid-cols-2 gap-6">
           <div className="glass-card p-6 space-y-5">
@@ -248,6 +382,8 @@ export default function Settings() {
                 <option value="en-US">English (US)</option>
                 <option value="hi-IN">Hindi</option>
                 <option value="en-GB">English (UK)</option>
+                <option value="en-AU">English (Australia)</option>
+                <option value="en-AE">English (UAE)</option>
               </select>
             </Field>
           </div>
@@ -274,11 +410,19 @@ export default function Settings() {
                 <span>1</span><span>10</span>
               </div>
             </Field>
+
+            <div className="rounded-xl p-4" style={{ background: "rgba(79,110,255,0.06)", border: "1px solid rgba(79,110,255,0.15)" }}>
+              <p className="text-xs" style={{ color: "rgba(107,143,255,0.9)" }}>
+                💡 The AI agent automatically adapts its scripts, intents, and knowledge retrieval
+                to match your <strong>Business Type</strong> set in the Business Profile tab.
+                No manual prompt editing required.
+              </p>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Credentials */}
+      {/* ── Credentials ── */}
       {activeTab === "credentials" && (
         <div className="glass-card p-6 space-y-5">
           <div className="flex items-center justify-between">
@@ -320,16 +464,22 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Notifications */}
+      {/* ── Notifications ── */}
       {activeTab === "notifications" && (
         <div className="glass-card p-6 space-y-4">
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Bell size={15} style={{ color: "#f59e0b" }} /> Notification Preferences
           </h3>
+          <div className="rounded-xl p-4 mb-2" style={{ background: "rgba(34,211,160,0.06)", border: "1px solid rgba(34,211,160,0.15)" }}>
+            <p className="text-xs" style={{ color: "rgba(34,211,160,0.9)" }}>
+              📱 Alerts are sent to the <strong>Team WhatsApp Number</strong> configured in Business Profile.
+              Make sure it is set before enabling notifications.
+            </p>
+          </div>
           {[
             { key: "notifyEscalation"  as const, label: "Human Escalation", desc: "Alert when AI cannot handle a call and escalates to a human", color: "#ef4444" },
-            { key: "notifyNewLead"     as const, label: "New Lead Created",  desc: "Alert when AI qualifies a new lead and adds to CRM",         color: "#22d3a0" },
-            { key: "notifyDailyReport" as const, label: "Daily Summary",    desc: "Receive end-of-day report: calls, leads, bookings",           color: "#4f6eff" },
+            { key: "notifyNewLead"     as const, label: "Hot Lead Created",  desc: "Alert when AI scores a lead as HOT and adds it to CRM",         color: "#22d3a0" },
+            { key: "notifyDailyReport" as const, label: "Daily Summary",    desc: "Receive end-of-day report: calls, leads, bookings",              color: "#4f6eff" },
           ].map(({ key, label, desc, color }) => (
             <div key={key} className="flex items-center justify-between py-3"
               style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>

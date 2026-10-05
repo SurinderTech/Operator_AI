@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 from app.core.logging import logger
 from app.core.config import settings
-import google.generativeai as genai
+import google.genai as genai
 
 
 class RAGPipeline:
@@ -18,7 +18,7 @@ class RAGPipeline:
     TOP_K = 5
 
     def __init__(self):
-        genai.configure(api_key=settings.GOOGLE_API_KEY)
+        self._client = genai.Client(api_key=settings.GOOGLE_API_KEY)
 
     async def ingest_document(
         self,
@@ -92,24 +92,24 @@ class RAGPipeline:
     async def _embed(self, text: str) -> list[float]:
         """Embed text using Google text-embedding-004."""
         loop = asyncio.get_event_loop()
+        client = self._client
         def _call():
-            result = genai.embed_content(
+            result = client.models.embed_content(
                 model=settings.EMBEDDING_MODEL,
-                content=text,
-                task_type="retrieval_document",
+                contents=text,
             )
-            return result["embedding"]
+            return result.embeddings[0].values
         return await loop.run_in_executor(None, _call)
 
     async def _embed_query(self, query: str) -> list[float]:
         loop = asyncio.get_event_loop()
+        client = self._client
         def _call():
-            result = genai.embed_content(
+            result = client.models.embed_content(
                 model=settings.EMBEDDING_MODEL,
-                content=query,
-                task_type="retrieval_query",
+                contents=query,
             )
-            return result["embedding"]
+            return result.embeddings[0].values
         return await loop.run_in_executor(None, _call)
 
     async def search(
