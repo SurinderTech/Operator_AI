@@ -1,12 +1,12 @@
 <div align="center">
 
- <img src="./assets/ai-employee.gif" alt="AI Employee Demo" width="850">
- 
-# VoxAI — AI Business Employee
+<img src="./assets/ai-employee.gif" alt="Operator AI Demo" width="850">
 
-**An autonomous AI worker that answers every call, qualifies every lead, books appointments, and updates your CRM — without a single human touch.**
+# Operator AI — AI Business Operator
 
-VoxAI plugs a phone number and a WhatsApp line into an intelligent agent that understands natural language, acts on business data, and hands off to your team only when a human is genuinely needed.
+**An autonomous AI operator that answers calls, handles WhatsApp conversations, qualifies leads, books appointments, updates your CRM, and executes business workflows — without manual effort.**
+
+Operator AI connects your phone number and WhatsApp line to an intelligent agent that understands natural language, uses your business data, takes real actions through connected tools, and involves a human only when human judgment is actually required.
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Next.js](https://img.shields.io/badge/Frontend-Next.js%2015-black?logo=next.js)](https://nextjs.org)
@@ -19,618 +19,1220 @@ VoxAI plugs a phone number and a WhatsApp line into an intelligent agent that un
 
 ---
 
-## What Is VoxAI
+## What Is Operator AI?
 
-Most businesses lose leads because their phone goes unanswered at 9 PM, their WhatsApp replies take 4 hours, and their sales team forgets to update the CRM after every call.
+Businesses spend a huge amount of time on repetitive operational work:
 
-VoxAI is a software-deployed AI employee that takes ownership of your inbound communication channel. When a customer calls or messages, the AI employee answers, understands what they want, looks up relevant business information, creates a lead, updates HubSpot, books a calendar appointment if needed, sends a WhatsApp confirmation, and — only if the situation demands it — transfers the call live to a human agent with a full conversation brief already in hand.
+- Answering routine calls
+- Responding to WhatsApp messages
+- Collecting customer information
+- Qualifying enquiries
+- Updating CRM records
+- Checking calendar availability
+- Booking appointments
+- Sending confirmations
+- Answering the same questions repeatedly
+- Following predefined workflows
 
-**Who it is for:** Real estate agencies, clinics, automotive dealers, and any service business that handles inbound customer enquiries at scale and cannot afford to miss a single lead.
+Operator AI is designed to **take over that work**.
+
+It is an autonomous AI business operator that can communicate with customers, understand their intent, retrieve business knowledge, call external tools, update systems, and complete workflows from beginning to end.
+
+A typical interaction can look like:
+
+```text
+Customer calls
+      ↓
+Operator AI answers
+      ↓
+Understands the request
+      ↓
+Retrieves business information
+      ↓
+Creates / updates customer record
+      ↓
+Qualifies the enquiry
+      ↓
+Books appointment if required
+      ↓
+Updates CRM
+      ↓
+Sends confirmation
+      ↓
+Conversation completed
+```
+
+The goal is simple:
+
+> **If AI can reliably do the work, humans shouldn't have to spend their time doing it manually.**
+
+Humans remain available for exceptions, decisions, sensitive situations, and tasks that genuinely require human judgment.
 
 ---
 
 ## The Problem
 
+A large part of business operations still depends on people manually moving information between conversations and software.
+
 | Traditional Workflow | What It Costs |
 |---|---|
-| Customer calls → rings out → missed | Lead lost forever |
-| Receptionist takes notes → forgets to update CRM | Pipeline blind spots |
-| Sales team manually qualifies via phone | 3–4 hours of low-value work daily |
-| WhatsApp handled by individuals | Inconsistent, slow, no tracking |
-| Follow-up depends on individual memory | Deals fall through |
+| Customer calls → nobody answers | Missed opportunity |
+| Employee answers → manually takes notes | Human time |
+| Information is manually entered into CRM | Repetitive work |
+| Customer asks routine questions | Employee time spent repeatedly |
+| Appointment requested → manual calendar checking | Unnecessary back-and-forth |
+| WhatsApp conversations handled manually | Slow and inconsistent responses |
+| Customer information exists across different systems | Context gets lost |
+| Follow-up depends on someone remembering | Opportunities are missed |
 
-The bottleneck is not your team's skill — it is the volume of repetitive, structured communication that happens before a real conversation is needed.
+The problem is not that employees cannot do this work.
 
----
+**The problem is that humans are spending time doing work that software can increasingly execute.**
 
-## The Solution
-
-VoxAI replaces that bottleneck with an autonomous agent that runs 24/7.
-
-```
-Customer (Phone / WhatsApp)
-        │
-        ▼
-  AI Receptionist ──► Load customer memory + RAG business context
-        │
-        ▼
-  Intent Classifier ──► property_inquiry | appointment_request | support | complaint
-        │
-   ┌────┼────┐
-   ▼    ▼    ▼
-Lead  Booking  Support      Human Handoff (escalation)
-Agent  Agent   Agent             │
-   └────┼────┘                   │
-        ▼                        ▼
-   Tool Calls              Live dial + team
-  (CRM, Calendar,          WhatsApp alert +
-   WhatsApp, RAG)          conversation brief
-        │
-        ▼
-   Responder ──► Natural voice / text reply to customer
-        │
-        ▼
-   Database ──► Conversation logged, lead scored, memory updated
-```
+Operator AI turns those repetitive workflows into autonomous AI workflows.
 
 ---
 
-## Core Features
+## The Operator AI Approach
 
-### AI Orchestrator (LangGraph)
-A stateful multi-agent graph built on LangGraph. Every customer message passes through a `receptionist → intent_classifier → [lead|booking|support|human_handoff] → responder` pipeline. Each node uses real tool calls and persists `AgentRun` + `ToolCall` records to the database for full observability.
+Operator AI acts as a software-deployed business operator that can communicate, reason, use tools, and execute actions.
 
-### Voice AI (Twilio)
-Inbound calls are answered by the AI using Amazon Polly (Aditi, Indian English). Speech is transcribed, processed by the orchestrator, and the response is read back — looping until the call ends or escalates. Call duration, recordings, and status are persisted on completion.
-
-### WhatsApp AI
-Inbound WhatsApp messages hit a Twilio webhook, route through the same AI orchestrator, and receive a text reply within seconds. For leads, property details are sent as rich WhatsApp messages.
-
-### Lead Management + Scoring
-Every enquiry automatically creates a `Lead` record scored COLD / WARM / HOT based on extracted budget (₹20L threshold for WARM, ₹50L for HOT). Hot leads trigger an immediate WhatsApp alert to your sales team.
-
-### HubSpot CRM Sync
-Leads are synced to HubSpot on creation. Stage updates (NEW → QUALIFIED → PROPOSAL → WON) propagate back to CRM in real time. A `MockCRM` is provided for development without credentials.
-
-### Calendar Booking
-The booking agent calls Google Calendar to find available slots and creates a confirmed appointment. The customer receives a WhatsApp confirmation with the date/time and (if enabled) a Google Meet link. The lead stage advances to `qualified` automatically.
-
-### RAG Knowledge Base
-Business owners upload documents (PDF or text). VoxAI chunks them, embeds them with `text-embedding-004`, and stores vectors in pgvector. Every customer query triggers a semantic search so the AI always answers from your actual business data — not hallucinations.
-
-### Customer Memory
-Preferences extracted from every conversation (location, budget, property type, bedrooms) are persisted to the `Customer.preferences` JSON column. The next time the same number calls, the AI greets them by name and knows their history.
-
-### Human Escalation
-When the AI detects a complaint, an angry customer, or an explicit request for a human, it:
-1. Creates a `HumanHandoff` DB record with a conversation summary
-2. Sends a WhatsApp alert to the team with the customer brief
-3. Live-dials the escalation phone via Twilio `<Dial>`
-4. If no answer, leaves a callback promise and closes gracefully
-
-### Dashboard (Next.js)
-Real-time dashboard showing: live calls, AI handle rate, lead pipeline by stage, agent run logs, call history, knowledge base management, integrations, and settings — all pulling from the live FastAPI backend.
-
-### Email OTP Auth
-Registration and login use Brevo-powered OTP email verification (2FA). JWT access + refresh tokens with bcrypt+SHA-256 password hashing.
-
----
-
-## End-to-End Business Workflow
-
-```mermaid
-sequenceDiagram
-    participant C as Customer
-    participant T as Twilio
-    participant W as Webhook Handler
-    participant O as AI Orchestrator
-    participant L as LLM (Gemini)
-    participant DB as Database
-    participant CRM as HubSpot CRM
-    participant CAL as Google Calendar
-    participant WA as WhatsApp
-
-    C->>T: Calls business number
-    T->>W: POST /webhooks/twilio/voice/inbound
-    W->>DB: Create Conversation + Call record
-    W->>T: TwiML: greet + Gather(speech)
-    C->>T: Speaks ("I want a 3BHK in Pune under 80 lakhs")
-    T->>W: POST /webhooks/twilio/voice/process (SpeechResult)
-    W->>DB: Save customer message
-    W->>O: process_customer_input()
-    O->>DB: Load customer memory
-    O->>DB: RAG search (property context)
-    O->>L: Classify intent + extract entities
-    L-->>O: intent=property_inquiry, budget=8000000, location=Pune, bedrooms=3
-    O->>DB: get_or_create_customer(phone)
-    O->>DB: create_lead(score=HOT)
-    O->>CRM: Sync lead to HubSpot
-    O->>WA: Send property cards to customer
-    O->>L: Generate natural voice response
-    L-->>O: "Great, I found 4 properties in Pune within your budget..."
-    O->>DB: Save AgentRun + ToolCall records
-    W->>T: TwiML: say(response) + Gather(next turn)
-    T->>C: AI speaks response
-    C->>T: "Can I visit tomorrow at 11 AM?"
-    T->>W: POST /webhooks/twilio/voice/process
-    W->>O: process_customer_input()
-    O->>CAL: get_available_slots()
-    O->>CAL: create_appointment(tomorrow 11AM)
-    O->>CRM: update_lead_stage(qualified)
-    O->>WA: Send appointment confirmation
-    W->>T: TwiML: "Your visit is confirmed for tomorrow at 11 AM..."
-    T->>C: AI confirms booking + hangs up
-    T->>W: POST /webhooks/twilio/voice/status (completed)
-    W->>DB: Finalise Call record + close Conversation
+```text
+                         CUSTOMER
+                            │
+                 ┌──────────┴──────────┐
+                 │                     │
+               Phone                WhatsApp
+                 │                     │
+                 └──────────┬──────────┘
+                            │
+                            ▼
+                  ┌──────────────────┐
+                  │  AI Receptionist │
+                  │                  │
+                  │ Memory + RAG     │
+                  │ Business Context │
+                  └────────┬─────────┘
+                           │
+                           ▼
+                  ┌──────────────────┐
+                  │ Intent Classifier│
+                  └────────┬─────────┘
+                           │
+             ┌─────────────┼──────────────┐
+             │             │              │
+             ▼             ▼              ▼
+          Lead          Booking        Support
+          Agent          Agent          Agent
+             │             │              │
+             └─────────────┼──────────────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │ Tool Calls  │
+                    └──────┬──────┘
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+      CRM              Calendar             RAG
+        │                  │                  │
+        └──────────────────┼──────────────────┘
+                           │
+                           ▼
+                    AI Responder
+                           │
+                  ┌────────┴────────┐
+                  │                 │
+                Voice              Text
+                  │                 │
+                  └────────┬────────┘
+                           ▼
+                       CUSTOMER
 ```
 
+The human is not the default workflow.
+
+**The human is the escalation path when AI should not continue on its own.**
+
 ---
 
-## System Architecture
+# Core Features
 
-```mermaid
-graph TD
-    subgraph Channels["Customer Channels"]
-        PHONE[📞 Inbound Phone Call]
-        WA_IN[💬 WhatsApp Message]
-    end
+## 🧠 AI Orchestrator — LangGraph
 
-    subgraph Twilio["Twilio"]
-        TW_VOICE[Voice / TwiML]
-        TW_WA[WhatsApp API]
-    end
+Operator AI uses a stateful multi-agent architecture built on LangGraph.
 
-    subgraph Backend["FastAPI Backend  :8000"]
-        WEBHOOK[Webhook Handler]
-        AUTH[Auth API  /auth]
-        BIZ[Business API  /businesses]
-        LEADS_API[Leads API  /leads]
-        CONV_API[Conversations API]
-        KNOW_API[Knowledge API]
-    end
+Every customer interaction passes through an intelligent workflow:
 
-    subgraph Agent["AI Orchestrator  LangGraph"]
-        RECEP[Receptionist Node]
-        IC[Intent Classifier]
-        LA[Lead Agent]
-        BA[Booking Agent]
-        SA[Support Agent]
-        HH[Human Handoff]
-        RESP[Responder Node]
-    end
+```text
+Receptionist
+     ↓
+Intent Classifier
+     ↓
+┌────┼────────┬──────────────┐
+↓    ↓        ↓              ↓
+Lead Booking Support   Human Handoff
+     ↓
+Responder
+```
 
-    subgraph LLM["Google AI"]
-        GEMINI_PRO[Gemini 1.5 Pro]
-        GEMINI_FLASH[Gemini 1.5 Flash]
-        EMBED[text-embedding-004]
-    end
+Each node can perform real actions using agent-callable tools.
 
-    subgraph Tools["Agent Tools"]
-        CRM_TOOL[CRM Tools]
-        CAL_TOOL[Calendar Tools]
-        COMM_TOOL[Communication Tools]
-        SEARCH_TOOL[Search / RAG Tools]
-    end
+Every execution is observable through persisted:
 
-    subgraph Storage["Storage"]
-        SQLITE[(SQLite / Dev)]
-        PG[(PostgreSQL + pgvector / Prod)]
-        REDIS[(Redis  Rate Limiting)]
-    end
+- `AgentRun`
+- `ToolCall`
+- `Conversation`
+- `Message`
+- `HumanHandoff`
 
-    subgraph Integrations["External Integrations"]
-        HUBSPOT[HubSpot CRM]
-        GCAL[Google Calendar]
-        BREVO[Brevo  Email OTP]
-        WA_OUT[WhatsApp  Twilio]
-    end
+records.
 
-    subgraph Frontend["Next.js Dashboard  :3000"]
-        DASH[Dashboard]
-        SIGNUP[Auth / Signup]
-        SETTINGS[Settings]
-    end
+This makes the system more than a conversational chatbot.
 
-    PHONE --> TW_VOICE --> WEBHOOK
-    WA_IN --> TW_WA --> WEBHOOK
-    WEBHOOK --> Agent
-    RECEP --> IC --> LA & BA & SA & HH
-    LA & BA & SA --> RESP
-    IC --> GEMINI_FLASH
-    RESP --> GEMINI_FLASH
-    RECEP --> SEARCH_TOOL --> EMBED
-    LA --> CRM_TOOL --> HUBSPOT
-    BA --> CAL_TOOL --> GCAL
-    LA & BA --> COMM_TOOL --> WA_OUT
-    Agent --> Storage
-    Backend --> Storage
-    Frontend --> Backend
-    AUTH --> BREVO
+**It is an action-oriented AI system.**
+
+---
+
+## 📞 Voice AI — Twilio
+
+Operator AI can answer inbound phone calls through Twilio.
+
+The voice workflow:
+
+1. Customer calls the business number
+2. Twilio receives the call
+3. Operator AI answers
+4. Customer speech is transcribed
+5. The AI orchestrator processes the request
+6. Relevant tools and business data are accessed
+7. AI generates a response
+8. The response is converted to speech
+9. The conversation continues until completion or escalation
+
+The system persists call information including:
+
+- Call status
+- Duration
+- Conversation
+- Recording information
+- Agent execution
+- Tool calls
+
+The current voice configuration uses Amazon Polly with Indian English support.
+
+---
+
+## 💬 WhatsApp AI
+
+Operator AI can handle inbound WhatsApp conversations through Twilio.
+
+```text
+WhatsApp Message
+       ↓
+Twilio Webhook
+       ↓
+FastAPI
+       ↓
+AI Orchestrator
+       ↓
+Business Tools
+       ↓
+AI Response
+       ↓
+WhatsApp
+```
+
+The same AI intelligence used for phone conversations can operate through WhatsApp.
+
+This means a customer can:
+
+- Ask questions
+- Provide requirements
+- Request information
+- Ask for an appointment
+- Receive confirmations
+- Continue previous conversations
+
+without requiring someone to manually handle every message.
+
+---
+
+## 🎯 Lead Management + Scoring
+
+When a customer expresses buying or service intent, Operator AI can automatically create a `Lead`.
+
+Relevant information can be extracted from natural language, including:
+
+- Budget
+- Location
+- Requirements
+- Property type
+- Bedrooms
+- Intent
+- Purchase timeline
+
+Current lead scoring:
+
+```text
+COLD
+Low buying intent
+
+WARM
+Budget ≥ ₹20L
+
+HOT
+Budget ≥ ₹50L
+```
+
+The AI can then automatically update the CRM and continue the workflow.
+
+Human attention is only required when the workflow reaches a situation where it is actually useful.
+
+---
+
+## 🔗 HubSpot CRM Automation
+
+Operator AI connects directly with HubSpot.
+
+Instead of requiring someone to manually copy information from a conversation into a CRM, the AI can perform those actions itself.
+
+It can:
+
+- Create contacts
+- Create leads
+- Update lead information
+- Update pipeline stages
+- Store relevant customer information
+- Synchronize conversation-derived data
+
+Example pipeline:
+
+```text
+NEW
+ ↓
+QUALIFIED
+ ↓
+PROPOSAL
+ ↓
+WON
+```
+
+A `MockCRM` implementation is also provided for development without external credentials.
+
+---
+
+## 📅 Calendar Automation
+
+Operator AI can use Google Calendar to complete appointment workflows.
+
+Example:
+
+```text
+Customer:
+"Can I visit tomorrow around 11?"
+
+        ↓
+
+Operator AI
+        ↓
+
+Check Calendar
+        ↓
+
+Find Available Slot
+        ↓
+
+Create Appointment
+        ↓
+
+Update CRM
+        ↓
+
+Send Confirmation
+```
+
+The customer can receive:
+
+- Appointment date
+- Appointment time
+- Confirmation message
+- Google Meet link when enabled
+
+Routine scheduling requires no manual back-and-forth.
+
+---
+
+## 📚 RAG Knowledge Base
+
+Businesses can upload their own documents in formats such as PDF or text.
+
+Operator AI processes these documents into a searchable knowledge base.
+
+```text
+Business Documents
+        ↓
+     Chunking
+        ↓
+    Embeddings
+        ↓
+     pgvector
+        ↓
+ Semantic Search
+        ↓
+ Relevant Context
+        ↓
+      AI Model
+        ↓
+ Customer Answer
+```
+
+The AI can therefore answer customer questions using the business's own information.
+
+Examples:
+
+- Product information
+- Property details
+- Pricing
+- Policies
+- Services
+- FAQs
+- Business documentation
+
+This reduces the need for employees to repeatedly answer the same questions.
+
+---
+
+## 🧠 Customer Memory
+
+Operator AI maintains useful customer context across conversations.
+
+For example:
+
+```json
+{
+  "name": "Rahul",
+  "location": "Chandigarh",
+  "budget": "₹50L",
+  "property_type": "3BHK",
+  "bedrooms": 3
+}
+```
+
+When the same customer contacts the business again, the AI can use their existing context rather than starting from zero.
+
+This enables more natural and personalized interactions.
+
+---
+
+## 🚨 Human Escalation
+
+Operator AI is designed to automate work, not blindly automate everything.
+
+When a situation requires human judgment, the AI can escalate.
+
+Examples:
+
+- Angry customer
+- Complaint
+- Sensitive situation
+- Complex request
+- Explicit request for a human
+- Situation outside the configured workflow
+
+The escalation workflow:
+
+```text
+AI detects escalation
+        ↓
+Create HumanHandoff
+        ↓
+Generate conversation summary
+        ↓
+Send notification
+        ↓
+Live-dial human
+        ↓
+Human takes over
+```
+
+The human receives the relevant context so the customer does not need to explain everything again.
+
+**AI handles the routine work. Humans handle the exceptions.**
+
+---
+
+# 📊 Business Dashboard
+
+Operator AI includes a Next.js dashboard for managing and observing the AI operator.
+
+The dashboard provides visibility into:
+
+- Live calls
+- AI handle rate
+- Lead pipeline
+- Agent executions
+- Tool calls
+- Call history
+- Customer conversations
+- Knowledge base
+- Integrations
+- Business settings
+
+The dashboard communicates with the FastAPI backend.
+
+---
+
+# 🔐 Authentication
+
+Operator AI uses email-based OTP authentication powered by Brevo.
+
+Authentication includes:
+
+- Email OTP verification
+- JWT access tokens
+- JWT refresh tokens
+- Password hashing
+- Secure authentication flows
+
+---
+
+# End-to-End Workflow
+
+The following example shows how Operator AI can handle an entire customer journey autonomously.
+
+```text
+Customer calls at 8:45 PM
+          │
+          ▼
+Operator AI answers
+          │
+          ▼
+Customer explains requirement
+          │
+          ▼
+AI understands intent
+          │
+          ▼
+Load customer memory
+          │
+          ▼
+Search business knowledge
+          │
+          ▼
+Extract structured information
+          │
+          ▼
+Create / update lead
+          │
+          ▼
+Sync information to HubSpot
+          │
+          ▼
+Customer asks for appointment
+          │
+          ▼
+Check Google Calendar
+          │
+          ▼
+Book available slot
+          │
+          ▼
+Update CRM
+          │
+          ▼
+Send WhatsApp confirmation
+          │
+          ▼
+Conversation completed
+```
+
+### Human effort for the routine workflow:
+
+**Zero.**
+
+---
+
+# Real-World Example
+
+Imagine a real estate business receiving dozens of enquiries every day.
+
+A customer calls:
+
+> "I'm looking for a 3BHK in Baner, around ₹90 lakhs."
+
+Operator AI can:
+
+1. Answer the call
+2. Understand the requirement
+3. Extract budget, location, and property type
+4. Search the business knowledge base
+5. Find relevant properties
+6. Create a lead
+7. Score the lead
+8. Sync it to HubSpot
+9. Send matching properties through WhatsApp
+10. Continue the conversation
+11. Check calendar availability
+12. Book a property visit
+13. Update the CRM
+14. Send appointment confirmation
+
+The entire workflow can happen without someone manually entering information into multiple systems.
+
+**The AI does the work.**
+
+---
+
+# This Is Not a Chatbot
+
+Traditional chatbots primarily answer questions.
+
+Operator AI is designed to **take actions**.
+
+| Traditional Chatbot | Operator AI |
+|---|---|
+| Answers questions | Understands and executes tasks |
+| Mostly conversational | Action-oriented |
+| Limited context | Persistent customer memory |
+| Stateless sessions | Cross-conversation context |
+| No external actions | CRM + Calendar + WhatsApp + RAG |
+| User performs the next step | AI can perform the next step |
+| Fixed responses | Tool-driven workflows |
+| Human completes the process | AI completes the routine process |
+| Limited observability | AgentRun + ToolCall tracking |
+
+The difference is simple:
+
+> **A chatbot talks. An operator gets things done.**
+
+---
+
+# System Architecture
+
+```text
+                         ┌────────────────────┐
+                         │      CUSTOMER      │
+                         └─────────┬──────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                 PHONE                         WHATSAPP
+                    │                             │
+                    ▼                             ▼
+                 Twilio                         Twilio
+                    │                             │
+                    └──────────────┬──────────────┘
+                                   │
+                                   ▼
+                         ┌──────────────────┐
+                         │  FastAPI Backend │
+                         │                  │
+                         │    Webhooks      │
+                         │      APIs        │
+                         └────────┬─────────┘
+                                  │
+                                  ▼
+                       ┌────────────────────┐
+                       │  LangGraph Agent  │
+                       │   Orchestrator     │
+                       └─────────┬──────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+              ▼                  ▼                  ▼
+        Lead Agent         Booking Agent      Support Agent
+              │                  │                  │
+              └──────────────────┼──────────────────┘
+                                 │
+                                 ▼
+                         ┌─────────────────┐
+                         │   Agent Tools   │
+                         └────────┬────────┘
+                                  │
+              ┌───────────────────┼──────────────────┐
+              │                   │                  │
+              ▼                   ▼                  ▼
+           HubSpot          Google Calendar        RAG
+              │                   │                  │
+              └───────────────────┼──────────────────┘
+                                  │
+                                  ▼
+                            PostgreSQL
+                                  │
+                                  ▼
+                         Next.js Dashboard
 ```
 
 ---
 
-## AI Employee: How It Thinks
+# AI Decision Flow
 
-Each customer message triggers the following sequence inside the agent:
+Every customer message triggers an internal processing pipeline.
 
 | Step | Node | What Happens |
 |---|---|---|
-| 1 | **Receptionist** | Loads customer memory from DB; runs RAG search against business knowledge base |
-| 2 | **Intent Classifier** | Gemini Flash classifies intent and extracts entities (budget, location, bedrooms, datetime) as structured JSON |
-| 3 | **Router** | Conditional edge routes to Lead / Booking / Support / Human Handoff node |
-| 4 | **Specialist Agent** | Calls real tools — creates lead, books calendar slot, searches knowledge, or initiates escalation |
-| 5 | **Responder** | Gemini Flash generates a warm, natural 1–3 sentence voice response with the context of all tool results |
-| 6 | **Persistence** | `AgentRun` + `ToolCall` records saved; customer preferences updated; message stored |
+| 1 | **Receptionist** | Loads customer memory and business context |
+| 2 | **RAG** | Searches relevant business knowledge |
+| 3 | **Intent Classifier** | Determines customer intent and extracts entities |
+| 4 | **Router** | Routes the request to the appropriate specialist |
+| 5 | **Specialist Agent** | Executes real tools and business actions |
+| 6 | **Responder** | Generates a natural customer-facing response |
+| 7 | **Persistence** | Stores execution, message, customer and tool data |
 
-### This Is Not a Chatbot
+The workflow is not simply:
 
-| Chatbot | VoxAI AI Employee |
-|---|---|
-| Answers questions | Takes actions |
-| Stores nothing | Updates CRM, DB, Calendar |
-| Stateless per session | Persistent customer memory across calls |
-| No external tools | CRM sync, calendar booking, WhatsApp messaging |
-| Rule-based routing | Semantic intent classification |
-| No escalation logic | Structured handoff with conversation brief |
+```text
+Message → LLM → Response
+```
+
+It is:
+
+```text
+Message
+   ↓
+Context
+   ↓
+Memory
+   ↓
+RAG
+   ↓
+Intent
+   ↓
+Decision
+   ↓
+Tool Execution
+   ↓
+Result
+   ↓
+Response
+   ↓
+Persistence
+```
 
 ---
 
-## Technology Stack
+# Technology Stack
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Frontend | Next.js 15, TypeScript | Business owner dashboard |
-| Styling | Vanilla CSS, Lucide icons | UI components |
-| Backend | FastAPI, Python 3.11+ | REST API + webhooks |
-| AI Framework | LangGraph 0.2 | Agent orchestration graph |
-| LLM | Gemini 1.5 Pro / Flash | Intent classification, response generation |
-| Embeddings | Google text-embedding-004 | Semantic search / RAG |
-| Vector Store | pgvector (PostgreSQL) | Knowledge base retrieval |
-| ORM | SQLAlchemy 2.0 async | Database access |
-| Database (dev) | SQLite + aiosqlite | Zero-config local development |
-| Database (prod) | PostgreSQL + pgvector | Production storage |
-| Cache / Rate Limit | Redis + ARQ | Per-caller rate limiting, background jobs |
-| Telephony | Twilio Voice + TwiML | Inbound calls, speech recognition, TTS |
-| Messaging | Twilio WhatsApp API | Customer messaging, notifications |
-| CRM | HubSpot API v3 | Lead and contact management |
-| Calendar | Google Calendar API | Appointment booking |
-| Email | Brevo Transactional API | OTP emails for auth |
-| Auth | JWT (python-jose), bcrypt | Stateless auth + OTP 2FA |
-| PDF Ingestion | pypdf | Knowledge base document loading |
+| Frontend | Next.js 15 | Business dashboard |
+| Language | TypeScript | Frontend development |
+| Styling | Tailwind CSS | UI |
+| Backend | FastAPI | REST API + webhooks |
+| Language | Python 3.11+ | Backend |
+| AI Framework | LangGraph | Agent orchestration |
+| LLM | Gemini | Intent classification + generation |
+| Embeddings | Google Embeddings | Semantic search |
+| Vector Store | pgvector | RAG retrieval |
+| ORM | SQLAlchemy | Database access |
+| Database | PostgreSQL | Production storage |
+| Database Dev | SQLite | Local development |
+| Cache | Redis | Rate limiting / background jobs |
+| Telephony | Twilio Voice | Phone communication |
+| Messaging | Twilio WhatsApp | WhatsApp communication |
+| CRM | HubSpot API | CRM automation |
+| Calendar | Google Calendar API | Appointment automation |
+| Email | Brevo | OTP authentication |
+| Voice | Amazon Polly | Text-to-speech |
+| Authentication | JWT + bcrypt | Secure authentication |
+| PDF Ingestion | pypdf | Document processing |
 
 ---
 
-## Project Structure
+# Project Structure
 
-```
-Ai_Employe/
+```text
+operator-ai/
+│
 ├── backend/
-│   ├── main.py                        # FastAPI app, middleware, routers
+│   ├── main.py
 │   ├── requirements.txt
+│   │
 │   ├── app/
 │   │   ├── agents/
 │   │   │   └── orchestrator/
-│   │   │       └── graph.py           # LangGraph agent graph (the core brain)
-│   │   ├── api/v1/
-│   │   │   ├── auth/                  # Register, login, OTP verify, refresh
-│   │   │   ├── businesses/            # Business profile CRUD
-│   │   │   ├── leads/                 # Lead pipeline endpoints
-│   │   │   ├── conversations/         # Conversation + message history
-│   │   │   ├── knowledge/             # Document upload + RAG ingestion
-│   │   │   ├── agents/                # AI agent configuration
-│   │   │   ├── calls/                 # Call log endpoints
-│   │   │   └── webhooks/              # Twilio voice + WhatsApp webhooks
+│   │   │       └── graph.py
+│   │   │
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       ├── auth/
+│   │   │       ├── businesses/
+│   │   │       ├── leads/
+│   │   │       ├── conversations/
+│   │   │       ├── knowledge/
+│   │   │       ├── agents/
+│   │   │       ├── calls/
+│   │   │       └── webhooks/
+│   │   │
 │   │   ├── core/
-│   │   │   ├── config.py              # Settings (pydantic-settings)
-│   │   │   ├── logging.py             # Loguru setup
-│   │   │   └── redis.py               # Redis client + rate limiting
+│   │   │   ├── config.py
+│   │   │   ├── logging.py
+│   │   │   └── redis.py
+│   │   │
 │   │   ├── integrations/
-│   │   │   ├── crm/hubspot.py         # HubSpot + MockCRM (provider-agnostic)
-│   │   │   ├── calendar/google_calendar.py
-│   │   │   └── whatsapp/twilio_whatsapp.py
-│   │   ├── memory/                    # Customer memory, conversation history
-│   │   ├── models/                    # SQLAlchemy ORM models
-│   │   ├── rag/pipeline.py            # RAG: chunk, embed, pgvector search
-│   │   ├── security/auth.py           # JWT, bcrypt, get_current_user
+│   │   │   ├── crm/
+│   │   │   │   └── hubspot.py
+│   │   │   ├── calendar/
+│   │   │   │   └── google_calendar.py
+│   │   │   └── whatsapp/
+│   │   │       └── twilio_whatsapp.py
+│   │   │
+│   │   ├── memory/
+│   │   │
+│   │   ├── models/
+│   │   │
+│   │   ├── rag/
+│   │   │   └── pipeline.py
+│   │   │
+│   │   ├── security/
+│   │   │   └── auth.py
+│   │   │
 │   │   ├── services/
-│   │   │   ├── email.py               # Brevo OTP email
-│   │   │   └── otp.py                 # OTP create / verify
+│   │   │   ├── email.py
+│   │   │   └── otp.py
+│   │   │
 │   │   └── tools/
-│   │       ├── crm_tools/             # Agent-callable CRM functions
-│   │       ├── calendar_tools/        # Agent-callable calendar functions
-│   │       ├── communication_tools/   # WhatsApp send helpers
-│   │       └── search_tools/          # RAG + property search
-│   └── database/session.py            # Async SQLAlchemy engine
+│   │       ├── crm_tools/
+│   │       ├── calendar_tools/
+│   │       ├── communication_tools/
+│   │       └── search_tools/
+│   │
+│   └── database/
+│       └── session.py
+│
 ├── frontend/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── auth/login/            # Login page (2FA OTP)
-│   │   │   ├── auth/signup/           # 3-step signup
-│   │   │   └── dashboard/            # Main dashboard
-│   │   ├── components/dashboard/
-│   │   │   ├── DashboardOverview.tsx  # KPIs, live calls, lead table
-│   │   │   ├── LiveCalls.tsx
-│   │   │   ├── LeadPipeline.tsx
-│   │   │   ├── AgentLogs.tsx
-│   │   │   ├── KnowledgeBase.tsx
-│   │   │   ├── Integrations.tsx
-│   │   │   └── Settings.tsx
+│   │   ├── components/
+│   │   │   └── dashboard/
 │   │   └── lib/
-│   │       ├── auth.tsx               # Auth context + OTP flow
-│   │       └── api.ts                 # Backend API client
+│   │
 │   └── package.json
-├── .env.example                       # All required variables documented
-├── docker-compose.yml                 # PostgreSQL + Redis
+│
+├── assets/
+│   └── operator-ai.gif
+│
+├── .env.example
+├── docker-compose.yml
 ├── LICENSE
 └── README.md
 ```
 
 ---
 
-## Local Development
+# Local Development
 
-### Prerequisites
+## Prerequisites
 
 - Python 3.11+
 - Node.js 18+
 - Git
 
-> **No Docker required for basic development.** The backend defaults to SQLite so you can run without PostgreSQL.
+Docker is optional for basic development.
 
-### 1. Clone
+The backend can use SQLite for local development.
+
+---
+
+## 1. Clone
 
 ```bash
 git clone https://github.com/SurinderTech/Ai_Employe.git
 cd Ai_Employe
 ```
 
-### 2. Environment Variables
+If the repository itself is renamed later:
+
+```bash
+git clone <your-new-repository-url>
+cd operator-ai
+```
+
+---
+
+## 2. Environment Variables
 
 ```bash
 cp .env.example backend/.env
 ```
 
-Edit `backend/.env`:
+Configure:
 
-| Variable | Required | Description |
-|---|---|---|
-| `GOOGLE_API_KEY` | ✅ | Gemini LLM + embeddings API key |
-| `BREVO_API_KEY` | ✅ | Email OTP delivery (Brevo transactional) |
-| `BREVO_SENDER_EMAIL` | ✅ | Verified sender address in Brevo |
-| `JWT_SECRET_KEY` | ✅ | Random string for JWT signing |
-| `DATABASE_URL` | — | Defaults to `sqlite+aiosqlite:///./ai_employee_dev.db` |
-| `TWILIO_ACCOUNT_SID` | Voice/WA | Twilio account SID |
-| `TWILIO_AUTH_TOKEN` | Voice/WA | Twilio auth token |
-| `TWILIO_PHONE_NUMBER` | Voice | Twilio voice phone number |
-| `TWILIO_WHATSAPP_NUMBER` | WhatsApp | Twilio WhatsApp sender |
-| `ESCALATION_PHONE` | Escalation | Human agent phone for live call transfer |
-| `HUBSPOT_ACCESS_TOKEN` | CRM | HubSpot private app token (MockCRM used if empty) |
-| `GOOGLE_CALENDAR_CREDENTIALS_JSON` | Calendar | Google service account credentials |
+```env
+GOOGLE_API_KEY=
+BREVO_API_KEY=
+BREVO_SENDER_EMAIL=
 
-### 3. Backend Setup
+JWT_SECRET_KEY=
+
+DATABASE_URL=
+
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_PHONE_NUMBER=
+TWILIO_WHATSAPP_NUMBER=
+
+ESCALATION_PHONE=
+
+HUBSPOT_ACCESS_TOKEN=
+
+GOOGLE_CALENDAR_CREDENTIALS_JSON=
+```
+
+---
+
+## 3. Backend
 
 ```bash
 cd backend
 
-# Create virtual environment
 python -m venv .venv
+```
 
-# Activate (Windows)
+### Windows
+
+```bash
 .venv\Scripts\activate
+```
 
-# Install dependencies
+### macOS / Linux
+
+```bash
+source .venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
-# Start backend (hot-reload)
+Start the server:
+
+```bash
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
+API documentation:
 
-### 4. Frontend Setup
+```text
+http://localhost:8000/docs
+```
+
+---
+
+## 4. Frontend
 
 ```bash
 cd frontend
 
-# Install dependencies
 npm install
 
-# Start dev server
 npm run dev
 ```
 
-Dashboard: [http://localhost:3000](http://localhost:3000)
+Dashboard:
 
-### 5. Twilio Webhooks (Local)
+```text
+http://localhost:3000
+```
 
-To test voice/WhatsApp locally, expose your backend using [ngrok](https://ngrok.com):
+---
+
+# Twilio Local Development
+
+To test Voice and WhatsApp locally, expose the backend using ngrok:
 
 ```bash
 ngrok http 8000
 ```
 
-In Twilio Console, set:
-- **Voice webhook:** `https://<ngrok-url>/api/v1/webhooks/twilio/voice/inbound`
-- **WhatsApp webhook:** `https://<ngrok-url>/api/v1/webhooks/twilio/whatsapp/inbound`
+Configure the Twilio webhooks:
+
+```text
+Voice:
+https://<ngrok-url>/api/v1/webhooks/twilio/voice/inbound
+
+WhatsApp:
+https://<ngrok-url>/api/v1/webhooks/twilio/whatsapp/inbound
+```
 
 ---
 
-## Production Deployment
+# Production Deployment
 
-### Recommended Stack
+## Recommended Stack
 
 | Component | Service |
 |---|---|
 | Frontend | Vercel |
 | Backend | Render / Railway / EC2 |
-| Database | Supabase (PostgreSQL + pgvector) |
+| Database | Supabase PostgreSQL + pgvector |
 | Redis | Redis Cloud / Upstash |
-| Messaging | Twilio (production number) |
+| Communication | Twilio |
+| CRM | HubSpot |
+| Calendar | Google Calendar |
 
-### Backend (Render)
+---
 
+## Backend — Render
+
+Build command:
+
+```bash
+pip install -r requirements.txt
 ```
-Build command: pip install -r requirements.txt
-Start command: uvicorn main:app --host 0.0.0.0 --port $PORT
+
+Start command:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
-Set all environment variables in the Render dashboard. Switch `DATABASE_URL` to your PostgreSQL connection string and `APP_ENV=production`.
+Configure all environment variables in the Render dashboard.
 
-### Frontend (Vercel)
+Use PostgreSQL for production rather than the local SQLite database.
+
+---
+
+## Frontend — Vercel
 
 ```bash
 cd frontend
 vercel deploy
 ```
 
-Set `NEXT_PUBLIC_API_URL=https://your-backend-url.com` in Vercel environment variables.
+Set:
 
-### Database with Docker (Local PostgreSQL + pgvector)
-
-```bash
-docker-compose up -d
-```
-
-Updates `DATABASE_URL` to:
-```
-postgresql+asyncpg://aiemployee:aiemployee_secret@localhost:5432/ai_employee_db
+```env
+NEXT_PUBLIC_API_URL=https://your-backend-url.com
 ```
 
 ---
 
-## Security
+# Security
+
+Operator AI includes multiple security mechanisms.
 
 | Mechanism | Implementation |
 |---|---|
-| Password hashing | bcrypt (12 rounds) + SHA-256 pre-hash (handles >72 byte passwords) |
-| Authentication | JWT Bearer tokens (access: 60 min, refresh: 30 days) |
-| 2FA | Email OTP via Brevo, 5-minute expiry, single-use |
-| Webhook validation | Twilio signature verification (bypassed in `DEBUG=True`) |
-| Rate limiting | Per-caller Redis rate limit on inbound voice + WhatsApp |
-| CORS | Explicit allowlist — no wildcard in production |
-| Secrets | All credentials via environment variables, never committed |
+| Password hashing | bcrypt + SHA-256 |
+| Authentication | JWT |
+| 2FA | Email OTP |
+| Webhook validation | Twilio signature verification |
+| Rate limiting | Redis |
+| CORS | Explicit production allowlist |
+| Secrets | Environment variables |
+| Database | Isolated application access |
+
+Credentials and API keys should never be committed to the repository.
 
 ---
 
-## Observability
+# Observability
 
-Every AI agent execution produces a complete audit trail:
+Operator AI maintains an audit trail of AI execution.
 
-- **`AgentRun`** — per-message record: input, intent, output, latency, status
-- **`ToolCall`** — per-tool record: tool name, input args, output, status, latency_ms
-- **`Conversation` / `Message`** — full conversation transcript per customer per session
-- **`HumanHandoff`** — escalation record with conversation summary and recommended action
-- **Backend console** — structured request logging with method, path, status, duration
-- **OTP console print** — OTP codes always printed to terminal in development
+### `AgentRun`
 
-Errors in tool calls are logged and caught gracefully; the agent never crashes a call due to a CRM or calendar failure.
+Stores:
+
+- Input
+- Intent
+- Output
+- Latency
+- Status
+
+### `ToolCall`
+
+Stores:
+
+- Tool name
+- Input arguments
+- Output
+- Status
+- Latency
+
+### `Conversation`
+
+Stores the customer conversation history.
+
+### `Message`
+
+Stores individual customer and AI messages.
+
+### `HumanHandoff`
+
+Stores:
+
+- Escalation reason
+- Conversation summary
+- Recommended action
+- Handoff status
+
+This makes it possible to understand **what the AI did, why it did it, and what happened afterward.**
 
 ---
 
-## Real-World Scenario
-
-**A real estate agency receives 80+ inbound calls per day. Their 3-person team cannot qualify every lead before end of business.**
-
-1. Customer calls at 8:45 PM — after office hours
-2. VoxAI answers: *"Thank you for calling ABC Realty, how can I help you today?"*
-3. Customer: *"I'm looking for a 3BHK in Baner, budget around 90 lakhs"*
-4. AI classifies intent: `property_inquiry`, budget: `9,000,000`, location: `Baner`, bedrooms: `3`
-5. Lead scored **HOT** — team receives WhatsApp alert instantly
-6. AI searches knowledge base — finds 3 matching listings, sends them via WhatsApp to customer
-7. Customer: *"Can I see the second one this Saturday?"*
-8. AI checks Google Calendar — Saturday 11 AM available
-9. Books appointment, updates lead to `qualified` in HubSpot
-10. WhatsApp confirmation sent: *"Your visit is confirmed for Saturday at 11:00 AM"*
-11. Call ends. `AgentRun`, `ToolCall`, `Conversation`, `Lead`, and `Appointment` all persisted.
-
-Total human effort: **zero.** The agent handled intake, qualification, CRM entry, and booking automatically.
-
----
-
-## Integrations
+# Integrations
 
 | Integration | Purpose | Status |
 |---|---|---|
-| Twilio Voice | Inbound phone calls, TTS, STT, live transfer | ✅ Implemented |
-| Twilio WhatsApp | Customer messaging, confirmations, team alerts | ✅ Implemented |
-| HubSpot CRM | Lead creation, stage updates, contact management | ✅ Implemented |
-| Google Calendar | Slot availability, appointment creation, Meet links | ✅ Implemented |
-| Google Gemini 1.5 | Intent classification, response generation | ✅ Implemented |
-| Google Embeddings | Knowledge base vector search | ✅ Implemented |
-| Brevo | OTP email delivery for authentication | ✅ Implemented |
-| pgvector | Vector similarity search for RAG | ✅ Implemented |
-| Redis | Rate limiting, background job queue | ✅ Implemented |
+| Twilio Voice | Inbound calls | ✅ Implemented |
+| Twilio WhatsApp | Customer messaging | ✅ Implemented |
+| HubSpot | CRM automation | ✅ Implemented |
+| Google Calendar | Appointment booking | ✅ Implemented |
+| Gemini | AI reasoning + generation | ✅ Implemented |
+| Google Embeddings | RAG | ✅ Implemented |
+| Brevo | OTP authentication | ✅ Implemented |
+| pgvector | Vector search | ✅ Implemented |
+| Redis | Rate limiting / jobs | ✅ Implemented |
 
 ---
 
-## Limitations
+# Limitations
 
-- **LLM latency:** Gemini Flash adds ~400–800ms per agent turn. Total response time including webhook round-trip is typically 1.5–3 seconds on voice.
-- **Intent coverage:** The intent classifier is currently tuned for real estate. Other verticals require prompt updates to the classifier and lead agent.
-- **RAG storage:** pgvector is used in production; SQLite fallback does not support vector search — the agent will use the LLM without retrieval in dev mode without PostgreSQL.
-- **WhatsApp sandbox:** Twilio WhatsApp sandbox requires customers to opt-in. Production deployment requires WhatsApp Business approval.
-- **Twilio Gather:** Speech recognition accuracy depends on call quality and language. Currently configured for `en-IN` (Indian English).
-- **Calendar:** Google Calendar integration requires a service account or OAuth credentials; mock is provided for development.
+- **LLM latency:** AI response time depends on model and network latency.
+- **Intent coverage:** Current workflows are primarily tuned toward the configured business use case.
+- **RAG storage:** Production RAG requires PostgreSQL + pgvector.
+- **WhatsApp:** Production deployment requires appropriate WhatsApp Business configuration.
+- **Voice recognition:** Accuracy depends on call quality, language, and speech recognition configuration.
+- **Calendar:** Google Calendar requires the appropriate credentials.
+- **Human escalation:** Escalation requires a configured human destination.
 
 ---
 
-## Roadmap
+# Roadmap
 
-### Completed
-- [x] LangGraph multi-agent orchestrator (Receptionist → Classifier → Lead/Booking/Support/Handoff → Responder)
-- [x] Twilio voice webhook with full TwiML conversation loop
-- [x] WhatsApp inbound/outbound via Twilio
-- [x] HubSpot CRM sync with lead scoring
-- [x] Google Calendar appointment booking
-- [x] pgvector RAG knowledge base
-- [x] Customer memory persistence
-- [x] Live call transfer with team WhatsApp alert
-- [x] JWT + OTP 2FA email authentication
-- [x] Next.js business dashboard
-- [x] Rate limiting, call status tracking, AgentRun observability
+## Completed
 
-### In Progress
-- [ ] Dashboard live data refresh (WebSocket or polling)
-- [ ] Agent configuration UI (name, greeting, personality)
+- [x] LangGraph multi-agent orchestrator
+- [x] AI Receptionist
+- [x] Intent classification
+- [x] Lead creation
+- [x] Lead scoring
+- [x] Twilio voice workflow
+- [x] WhatsApp workflow
+- [x] HubSpot CRM integration
+- [x] Google Calendar integration
+- [x] RAG knowledge base
+- [x] Customer memory
+- [x] Human escalation
+- [x] JWT authentication
+- [x] Email OTP authentication
+- [x] Next.js dashboard
+- [x] AgentRun observability
+- [x] ToolCall observability
+- [x] Rate limiting
+
+## In Progress
+
+- [ ] Real-time dashboard updates
+- [ ] AI operator configuration UI
 - [ ] Knowledge base upload UI
+- [ ] More business workflow templates
 
-### Planned
-- [ ] Zoho / Salesforce CRM adapters
-- [ ] Multi-language support (Hindi, regional)
-- [ ] Outbound call campaigns
-- [ ] SMS follow-up automation
-- [ ] Custom industry intent classifiers (healthcare, automotive)
-- [ ] Usage analytics and conversion reporting
-- [ ] Multi-business / SaaS tenancy
+## Planned
 
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes with tests where appropriate
-4. Commit with a clear message: `git commit -m "feat: add X"`
-5. Push and open a Pull Request against `main`
-
-**Code conventions:**
-- Python: type annotations on all public functions, `async/await` throughout
-- TypeScript: strict mode, no `any` where avoidable
-- Commit format: `feat | fix | refactor | docs | test: description`
+- [ ] Multiple AI operators
+- [ ] AI Sales Operator
+- [ ] AI Support Operator
+- [ ] AI Appointment Operator
+- [ ] AI Operations Operator
+- [ ] Outbound call automation
+- [ ] Automated follow-up workflows
+- [ ] SMS automation
+- [ ] Multi-language support
+- [ ] More CRM integrations
+- [ ] More industry-specific agents
+- [ ] Usage analytics
+- [ ] Conversion analytics
+- [ ] Multi-business SaaS architecture
+- [ ] AI workforce management
 
 ---
 
-## License
+# The Vision
 
-[MIT License](./LICENSE) — © 2024 SurinderTech
+Operator AI is not meant to be another chatbot.
+
+The bigger idea is an **AI workforce for businesses**.
+
+Today:
+
+```text
+              OPERATOR AI
+                   │
+                   ▼
+            AI Receptionist
+```
+
+Tomorrow:
+
+```text
+                    OPERATOR AI
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+ AI Receptionist    AI Sales Operator   AI Support
+        │                │                │
+        ├────────────────┼────────────────┤
+        │                │                │
+        ▼                ▼                ▼
+ AI Appointment     AI Researcher     AI Operations
+```
+
+Each operator can have:
+
+- Its own role
+- Its own tools
+- Its own instructions
+- Its own knowledge
+- Its own memory
+- Its own workflows
+- Its own permissions
+
+The business owner doesn't need to manage every individual task.
+
+**They configure the system. The AI operates it.**
+
+---
+
+# The Philosophy
+
+> **Humans should make decisions. AI should handle the work.**
+
+The future of business automation isn't another interface where humans click buttons faster.
+
+It's software that can:
+
+**Understand → Decide → Act → Verify → Remember**
+
+Operator AI is built around that idea.
+
+If a task is repetitive, structured, measurable, and can be performed reliably by software:
+
+**Why should a human have to do it manually?**
+
+---
+
+# License
+
+This project is licensed under the **MIT License**.
 
 ---
 
 <div align="center">
 
-**VoxAI turns your inbound phone line into a tireless, intelligent employee that qualifies leads, books appointments, updates your CRM, and escalates only what matters — so your team can focus on closing.**
+## Operator AI
 
-[⭐ Star this repo](https://github.com/SurinderTech/Ai_Employe) · [🐛 Report a Bug](https://github.com/SurinderTech/Ai_Employe/issues) · [ Request a Feature](https://github.com/SurinderTech/Ai_Employe/issues)
+**An AI operator that doesn't just talk — it gets the work done.**
+
+**Understand. Decide. Act.**
+
+⭐ Star the repository if you find it useful.
 
 </div>
