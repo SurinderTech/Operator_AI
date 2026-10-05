@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./assets/ai-employee.gif" alt="Operator AI Demo" width="850">
+<img src="./assets/c4cbe309-153b-4ce8-93d3-24ffc90bdef6.gif" alt="Operator AI Demo" width="850">
 
 # Operator AI — AI Business Operator
 
