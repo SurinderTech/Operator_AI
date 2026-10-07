@@ -159,7 +159,7 @@ The human is not the default workflow.
 
 # Core Features
 
-## 🧠 AI Orchestrator — LangGraph
+##  AI Orchestrator — LangGraph
 
 Operator AI uses a stateful multi-agent architecture built on LangGraph.
 
