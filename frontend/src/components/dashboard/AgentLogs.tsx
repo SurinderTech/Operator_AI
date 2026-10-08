@@ -1,313 +1,239 @@
 "use client";
-
 import { useEffect, useState, useCallback } from "react";
-import { RefreshCw } from "lucide-react";
-import {
-  fetchAgentRuns,
-  fetchAgentRunDetail,
-  type AgentRun,
-  type AgentRunDetail,
-  fmtTimeFull,
-} from "@/lib/api";
+import { RefreshCw, ChevronRight, Activity } from "lucide-react";
+import { fetchAgentRuns, fetchAgentRunDetail, type AgentRun, type AgentRunDetail, fmtTimeFull } from "@/lib/api";
 
-const statusColor: Record<string, string> = {
-  running:   "#4f6eff",
-  completed: "#22d3a0",
-  escalated: "#f59e0b",
-  failed:    "#ef4444",
+const STATUS_MAP: Record<string, { cls: string; label: string }> = {
+  running:   { cls: "badge-blue",   label: "Running"   },
+  completed: { cls: "badge-green",  label: "Completed" },
+  escalated: { cls: "badge-amber",  label: "Escalated" },
+  failed:    { cls: "badge-red",    label: "Failed"    },
 };
 
 const intentIcon: Record<string, string> = {
-  // Universal intents (current)
-  inquiry:             "📋",
-  appointment_request: "📅",
-  support:             "🛠️",
-  complaint:           "⚠️",
-  follow_up:           "🔄",
-  out_of_scope:        "❓",
-  // Legacy real-estate intents (backward compat)
-  property_inquiry:    "🏠",
-  price_inquiry:       "💰",
+  inquiry: "📋", appointment_request: "📅", support: "🛠️",
+  complaint: "⚠️", follow_up: "🔄", out_of_scope: "❓",
+  property_inquiry: "🏠", price_inquiry: "💰",
 };
-
-/** Return icon for any intent string, with a sensible fallback. */
-function getIntentIcon(intent: string): string {
-  return intentIcon[intent] ?? "🤖";
-}
+function getIntentIcon(intent: string) { return intentIcon[intent] ?? "🤖"; }
 
 const toolIcon: Record<string, string> = {
-  search_knowledge:      "🔍",
-  search_properties:     "🏠",
-  get_or_create_customer:"👤",
-  create_lead:           "📋",
-  update_lead_stage:     "📈",
-  get_available_slots:   "📅",
-  create_appointment:    "📅",
-  send_lead_whatsapp:    "💬",
-  send_appointment_confirmation: "✅",
-  notify_human_handoff:  "🚨",
+  search_knowledge: "🔍", search_properties: "🏠", check_availability: "📅",
+  book_appointment: "✅", create_lead: "👤", send_whatsapp: "💬",
+  update_lead: "📝", escalate_to_human: "🚨",
 };
 
 export default function AgentLogs() {
-  const [runs, setRuns] = useState<AgentRun[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
-  const [detail, setDetail] = useState<AgentRunDetail | null>(null);
+  const [runs, setRuns]         = useState<AgentRun[]>([]);
+  const [selected, setSelected] = useState<AgentRun | null>(null);
+  const [detail, setDetail]     = useState<AgentRunDetail | null>(null);
+  const [loading, setLoading]   = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [filter, setFilter]     = useState("all");
 
-  const fetchRuns = useCallback(async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      const data = await fetchAgentRuns(50);
+      const data = await fetchAgentRuns(100);
       setRuns(data);
-    } catch {
-      // Backend not available — keep existing data
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* offline */ } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    fetchRuns();
-    const interval = setInterval(fetchRuns, 5_000);
-    return () => clearInterval(interval);
-  }, [fetchRuns]);
+  useEffect(() => { load(); const t = setInterval(load, 8_000); return () => clearInterval(t); }, [load]);
 
-  const selectRun = useCallback(async (run: AgentRun) => {
-    if (selectedRun?.id === run.id) {
-      setSelectedRun(null);
-      setDetail(null);
-      return;
-    }
-    setSelectedRun(run);
-    setDetail(null);
+  const selectRun = async (run: AgentRun) => {
+    setSelected(run);
     setDetailLoading(true);
     try {
       const d = await fetchAgentRunDetail(run.id);
       setDetail(d);
-    } catch {
-      // Detail fetch failed — we still show the basic run info
-    } finally {
-      setDetailLoading(false);
-    }
-  }, [selectedRun]);
+    } catch { setDetail(null); } finally { setDetailLoading(false); }
+  };
 
-  const completed = runs.filter((r) => r.status === "completed").length;
-  const escalated = runs.filter((r) => r.status === "escalated").length;
-  const failed    = runs.filter((r) => r.status === "failed").length;
-  const avgLatency = runs.length
-    ? Math.round(runs.reduce((s, r) => s + (r.latency_ms ?? 0), 0) / runs.length)
-    : 0;
+  const filtered = runs.filter((r) => filter === "all" || r.status === filter);
 
-  const intentCounts: Record<string, number> = {};
-  for (const r of runs) {
-    if (r.intent) intentCounts[r.intent] = (intentCounts[r.intent] ?? 0) + 1;
-  }
+  const FILTERS = ["all","running","completed","escalated","failed"];
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex-between fade-in-up" style={{ opacity: 0 }}>
         <div>
-          <h2 className="text-lg font-semibold text-white">Agent Execution Log</h2>
-          <p className="text-xs mt-0.5" style={{ color: "rgba(226,232,240,0.4)" }}>
-            Every AI decision, tool call, and outcome — full observability
-          </p>
+          <h1 className="page-title">Activity</h1>
+          <p className="page-subtitle">Complete audit log of all operator runs and actions.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-            style={{ background: "rgba(34,211,160,0.1)", border: "1px solid rgba(34,211,160,0.3)" }}
-          >
-            <span className="live-dot-inner" />
-            <span className="text-xs font-semibold" style={{ color: "#22d3a0" }}>LIVE</span>
-          </div>
-          <button
-            onClick={fetchRuns}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all"
-            style={{
-              background: "rgba(79,110,255,0.1)",
-              color: "#6b8fff",
-              border: "1px solid rgba(79,110,255,0.2)",
-            }}
-          >
-            <RefreshCw size={11} /> Refresh
-          </button>
-        </div>
+        <button className="icon-btn" onClick={load} title="Refresh">
+          <RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+        </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      {/* Filters */}
+      <div className="flex-gap-8 fade-in-up" style={{ opacity: 0, animationDelay: "0.04s" }}>
+        <div style={{ display: "flex", gap: 3, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r)", padding: 3 }}>
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              style={{
+                padding: "4px 10px", borderRadius: "var(--r-sm)", fontSize: "12px", fontWeight: 500,
+                border: "none", cursor: "pointer", fontFamily: "inherit", textTransform: "capitalize",
+                background: filter === f ? "var(--surface-3)" : "transparent",
+                color: filter === f ? "var(--text)" : "var(--text-3)",
+              }}
+            >{f}</button>
+          ))}
+        </div>
+        <span style={{ fontSize: "12px", color: "var(--text-3)", marginLeft: "auto" }}>
+          {filtered.length} run{filtered.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {/* Split: list + detail */}
+      <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 400px" : "1fr", gap: 14 }}>
         {/* Run list */}
-        <div className="col-span-2 glass-card" style={{ maxHeight: 560, overflowY: "auto" }}>
+        <div className="card fade-in-up" style={{ padding: 0, overflow: "hidden", opacity: 0, animationDelay: "0.08s" }}>
           {loading ? (
-            <div className="p-8 text-center" style={{ color: "rgba(226,232,240,0.4)" }}>
-              Connecting to backend...
+            <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+              {[1,2,3,4,5].map((i) => <div key={i} className="skeleton" style={{ height: 54, borderRadius: "var(--r)" }} />)}
             </div>
-          ) : runs.length === 0 ? (
-            <div className="p-10 text-center" style={{ color: "rgba(226,232,240,0.3)" }}>
-              <p className="text-sm mb-1">No agent runs yet</p>
-              <p className="text-xs">Make a call to your Twilio number to see the AI think here.</p>
+          ) : filtered.length === 0 ? (
+            <div className="empty-state">
+              <Activity size={28} />
+              <p>No activity yet. Operator runs will appear here as they execute.</p>
             </div>
           ) : (
-            <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
-              {runs.map((run) => (
-                <div
-                  key={run.id}
-                  className="p-4 cursor-pointer transition-all duration-150"
-                  style={{
-                    background:
-                      selectedRun?.id === run.id
-                        ? "rgba(79,110,255,0.08)"
-                        : "transparent",
-                  }}
-                  onClick={() => selectRun(run)}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <span className="text-lg flex-shrink-0 mt-0.5">
-                        {getIntentIcon(run.intent ?? "")}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span
-                            className="text-xs font-mono px-2 py-0.5 rounded-full"
-                            style={{
-                              background: `${statusColor[run.status] ?? "#888"}20`,
-                              color: statusColor[run.status] ?? "#888",
-                              border: `1px solid ${statusColor[run.status] ?? "#888"}40`,
-                            }}
-                          >
-                            {run.status}
-                          </span>
-                          <span className="text-xs font-mono" style={{ color: "rgba(226,232,240,0.4)" }}>
-                            {run.intent ?? "unknown"}
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {["Intent","Status","Input","Output","Latency","Time",""].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((run) => {
+                  const sm = STATUS_MAP[run.status] ?? { cls: "badge-gray", label: run.status };
+                  const isSelected = selected?.id === run.id;
+                  return (
+                    <tr
+                      key={run.id}
+                      style={{ cursor: "pointer", background: isSelected ? "rgba(255,255,255,0.02)" : undefined }}
+                      onClick={() => selectRun(run)}
+                    >
+                      <td>
+                        <div className="flex-gap-8">
+                          <span style={{ fontSize: "14px" }}>{getIntentIcon(run.intent ?? "")}</span>
+                          <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-2)", textTransform: "capitalize" }}>
+                            {run.intent?.replace(/_/g, " ") ?? "unknown"}
                           </span>
                         </div>
-                        <p className="text-xs truncate" style={{ color: "rgba(226,232,240,0.65)" }}>
-                          💬 &quot;{run.input_text}&quot;
+                      </td>
+                      <td><span className={`badge ${sm.cls}`}>{sm.label}</span></td>
+                      <td>
+                        <p style={{ fontSize: "12px", color: "var(--text-3)", maxWidth: 160 }} className="truncate">
+                          {run.input_text?.slice(0, 50) ?? "—"}
                         </p>
-
-                        {/* Expanded detail */}
-                        {selectedRun?.id === run.id && (
-                          <div className="mt-3 space-y-3">
-                            <p className="text-xs" style={{ color: "rgba(226,232,240,0.5)" }}>
-                              <span style={{ color: "#22d3a0" }}>AI:</span>{" "}
-                              {run.output_text}
-                            </p>
-                            {detailLoading && (
-                              <p className="text-xs" style={{ color: "rgba(226,232,240,0.3)" }}>
-                                Loading tool calls...
-                              </p>
-                            )}
-                            {detail?.tool_calls && detail.tool_calls.length > 0 && (
-                              <div className="space-y-1">
-                                <p className="text-xs font-semibold" style={{ color: "rgba(226,232,240,0.4)" }}>
-                                  Tools used:
-                                </p>
-                                {detail.tool_calls.map((tc, i) => (
-                                  <div key={i} className="flex items-center gap-2">
-                                    <span>{toolIcon[tc.tool_name] ?? "🔧"}</span>
-                                    <span className="text-xs font-mono" style={{ color: "rgba(226,232,240,0.6)" }}>
-                                      {tc.tool_name}
-                                    </span>
-                                    <span
-                                      className="text-xs"
-                                      style={{ color: tc.status === "success" ? "#22d3a0" : "#ef4444" }}
-                                    >
-                                      {tc.status}
-                                    </span>
-                                    {tc.latency_ms && (
-                                      <span className="text-xs" style={{ color: "#4f6eff" }}>
-                                        {tc.latency_ms}ms
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      <p className="text-xs font-mono" style={{ color: "rgba(226,232,240,0.35)" }}>
-                        {fmtTimeFull(run.created_at)}
-                      </p>
-                      {run.latency_ms && (
-                        <p className="text-xs mt-0.5" style={{ color: "#4f6eff" }}>
-                          ⚡ {run.latency_ms}ms
+                      </td>
+                      <td>
+                        <p style={{ fontSize: "12px", color: "var(--text-3)", maxWidth: 160 }} className="truncate">
+                          {run.output_text?.slice(0, 50) ?? "—"}
                         </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "12px", color: "var(--text-3)", fontFamily: "monospace" }}>
+                          {run.latency_ms ? `${run.latency_ms}ms` : "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: "11px", color: "var(--text-3)" }}>
+                          {fmtTimeFull(run.created_at)}
+                        </span>
+                      </td>
+                      <td>
+                        <ChevronRight size={13} color="var(--text-3)" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
 
-        {/* Stats sidebar */}
-        <div className="space-y-4">
-          <div className="glass-card p-4">
-            <h3 className="text-xs font-semibold text-white mb-3">Run Summary</h3>
-            <div className="space-y-3">
+        {/* Run detail */}
+        {selected && (
+          <div className="card fade-in-up" style={{ padding: 18, opacity: 0, alignSelf: "start", maxHeight: "80vh", overflowY: "auto" }}>
+            <div className="flex-between" style={{ marginBottom: 14 }}>
+              <div className="flex-gap-8">
+                <span style={{ fontSize: "16px" }}>{getIntentIcon(selected.intent ?? "")}</span>
+                <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)", textTransform: "capitalize" }}>
+                  {selected.intent?.replace(/_/g, " ") ?? "Run Details"}
+                </p>
+              </div>
+              <button className="icon-btn" onClick={() => { setSelected(null); setDetail(null); }} style={{ fontSize: "16px" }}>×</button>
+            </div>
+
+            {/* Meta */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
               {[
-                { label: "Total Runs",  value: runs.length,  color: "#4f6eff" },
-                { label: "Completed",   value: completed,    color: "#22d3a0" },
-                { label: "Escalated",   value: escalated,    color: "#f59e0b" },
-                { label: "Failed",      value: failed,       color: "#ef4444" },
-                { label: "Avg Latency", value: `${avgLatency}ms`, color: "#a855f7" },
-              ].map((s) => (
-                <div key={s.label} className="flex justify-between items-center">
-                  <span className="text-xs" style={{ color: "rgba(226,232,240,0.5)" }}>
-                    {s.label}
-                  </span>
-                  <span className="text-sm font-bold" style={{ color: s.color }}>
-                    {s.value}
-                  </span>
+                { label: "Status",  value: <span className={`badge ${(STATUS_MAP[selected.status] ?? { cls: "badge-gray" }).cls}`}>{selected.status}</span> },
+                { label: "Latency", value: selected.latency_ms ? `${selected.latency_ms}ms` : "—" },
+                { label: "Time",    value: fmtTimeFull(selected.created_at) },
+              ].map((row) => (
+                <div key={row.label} className="flex-between">
+                  <span style={{ fontSize: "12px", color: "var(--text-3)" }}>{row.label}</span>
+                  {typeof row.value === "string"
+                    ? <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-2)" }}>{row.value}</span>
+                    : row.value
+                  }
                 </div>
               ))}
             </div>
-          </div>
 
-          <div className="glass-card p-4">
-            <h3 className="text-xs font-semibold text-white mb-3">Intent Breakdown</h3>
-            {Object.keys(intentCounts).length === 0 ? (
-              <p className="text-xs" style={{ color: "rgba(226,232,240,0.3)" }}>No data yet</p>
-            ) : (
-              Object.entries(intentCounts)
-                .sort(([, a], [, b]) => b - a)
-                .map(([intent, count]) => {
-                  const pct = runs.length ? Math.round((count / runs.length) * 100) : 0;
-                  return (
-                    <div key={intent} className="mb-2">
-                      <div className="flex justify-between text-xs mb-1">
-                        <span
-                          style={{
-                            color: "rgba(226,232,240,0.5)",
-                            fontFamily: "monospace",
-                            fontSize: 10,
-                          }}
-                        >
-                          {intentIcon[intent] ?? "🤖"} {intent}
+            {/* Messages */}
+            {selected.input_text && (
+              <div style={{ marginBottom: 10 }}>
+                <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: 5 }}>Customer Input</p>
+                <div style={{ padding: "10px 12px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r)", fontSize: "12px", color: "var(--text-2)", lineHeight: 1.5 }}>
+                  {selected.input_text}
+                </div>
+              </div>
+            )}
+            {selected.output_text && (
+              <div style={{ marginBottom: 14 }}>
+                <p style={{ fontSize: "11px", color: "var(--green)", marginBottom: 5 }}>Operator Response</p>
+                <div style={{ padding: "10px 12px", background: "rgba(34,197,94,0.04)", border: "1px solid rgba(34,197,94,0.15)", borderRadius: "var(--r)", fontSize: "12px", color: "var(--text-2)", lineHeight: 1.5 }}>
+                  {selected.output_text}
+                </div>
+              </div>
+            )}
+
+            {/* Tool calls from detail */}
+            {detailLoading ? (
+              <div className="skeleton" style={{ height: 80, borderRadius: "var(--r)" }} />
+            ) : detail?.tool_calls && detail.tool_calls.length > 0 && (
+              <div>
+                <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: 8 }}>Tools Executed ({detail.tool_calls.length})</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {detail.tool_calls.map((tc, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)" }}>
+                      <span style={{ fontSize: "13px" }}>{toolIcon[tc.tool_name] ?? "⚙️"}</span>
+                      <span style={{ fontSize: "12px", color: "var(--text-2)", fontWeight: 500 }}>{tc.tool_name.replace(/_/g, " ")}</span>
+                      {tc.success !== undefined && (
+                        <span className={`badge ${tc.success ? "badge-green" : "badge-red"}`} style={{ marginLeft: "auto", fontSize: "10px" }}>
+                          {tc.success ? "✓" : "✗"}
                         </span>
-                        <span style={{ color: "rgba(226,232,240,0.7)" }}>{count}</span>
-                      </div>
-                      <div
-                        className="w-full rounded-full"
-                        style={{ height: 3, background: "rgba(255,255,255,0.06)" }}
-                      >
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${pct}%`, background: "#4f6eff" }}
-                        />
-                      </div>
+                      )}
                     </div>
-                  );
-                })
+                  ))}
+                </div>
+              </div>
             )}
           </div>
-        </div>
+        )}
       </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

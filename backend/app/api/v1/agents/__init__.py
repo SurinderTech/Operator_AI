@@ -1,26 +1,32 @@
 """
-Agents API — dashboard stats, agent run logs, chat test, and WebSocket stream.
+Agents API — dashboard stats, agent run logs, chat test, CRUD, and WebSocket stream.
 
-GET  /api/v1/agents/stats          — aggregate stats for the dashboard overview
-GET  /api/v1/agents/runs           — agent run logs (conversations view)
-GET  /api/v1/agents/runs/{run_id}  — single run with tool calls
-POST /api/v1/agents/chat           — test the AI agent with a message (no Twilio needed)
-WS   /api/v1/agents/ws/logs        — WebSocket that streams live AgentRun events
+GET    /api/v1/agents/stats              — aggregate stats for the dashboard overview
+GET    /api/v1/agents/runs              — agent run logs (conversations view)
+GET    /api/v1/agents/runs/{run_id}     — single run with tool calls
+POST   /api/v1/agents/chat             — test the AI agent with a message (no Twilio needed)
+GET    /api/v1/agents/public/list       — list all agents (no auth, dev)
+POST   /api/v1/agents/public/create     — create an agent (no auth, dev)
+PATCH  /api/v1/agents/public/{id}       — update an agent (no auth, dev)
+DELETE /api/v1/agents/public/{id}       — delete an agent (no auth, dev)
 """
 from __future__ import annotations
 import uuid
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc, and_
+from pydantic import BaseModel
 
 from app.database.session import get_db
 from app.models.conversation import AgentRun, ToolCall, Call, CallStatus
 from app.models.customer import Lead, LeadScore, LeadStatus
 from app.models.appointment import Appointment
-from app.models.business import Business
+from app.models.business import Business, BusinessStatus
 from app.models.integration import HumanHandoff
+from app.models.agent import Agent, AgentConfig, AgentType, AgentStatus
 
 router = APIRouter()
 
@@ -278,3 +284,184 @@ async def get_agent_run(
             for t in tools
         ],
     }
+
+
+# ── Public Agent CRUD (dev / no-auth) ────────────────────────────────────────
+
+class CreateAgentRequest(BaseModel):
+    name: str
+    agent_type: str = "receptionist"
+    greeting_message: Optional[str] = None
+    system_prompt: Optional[str] = None
+    language: str = "en-IN"
+    voice_id: Optional[str] = None
+    phone_number: Optional[str] = None
+    persona: Optional[dict] = None
+    allowed_tools: Optional[list] = None
+    escalation_triggers: Optional[list] = None
+
+
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = None
+    agent_type: Optional[str] = None
+    greeting_message: Optional[str] = None
+    system_prompt: Optional[str] = None
+    language: Optional[str] = None
+    voice_id: Optional[str] = None
+    phone_number: Optional[str] = None
+    status: Optional[str] = None
+    is_active: Optional[bool] = None
+    persona: Optional[dict] = None
+    allowed_tools: Optional[list] = None
+    escalation_triggers: Optional[list] = None
+
+
+def _agent_to_dict(agent: Agent) -> dict:
+    cfg = agent.config
+    return {
+        "id": str(agent.id),
+        "name": agent.name,
+        "agent_type": agent.agent_type.value,
+        "status": agent.status.value,
+        "is_active": agent.is_active,
+        "phone_number": agent.phone_number,
+        "created_at": agent.created_at.isoformat() if agent.created_at else None,
+        "config": {
+            "greeting_message": cfg.greeting_message if cfg else None,
+            "system_prompt": cfg.system_prompt if cfg else None,
+            "language": cfg.language if cfg else "en-IN",
+            "voice_id": cfg.voice_id if cfg else None,
+            "persona": cfg.persona if cfg else {},
+            "allowed_tools": cfg.allowed_tools if cfg else [],
+            "escalation_triggers": cfg.escalation_triggers if cfg else [],
+            "temperature": cfg.temperature if cfg else 0.3,
+        } if cfg else {},
+    }
+
+
+@router.get("/public/list")
+async def list_agents_public(db: AsyncSession = Depends(get_db)):
+    """List all agents for the first business — no auth (dev mode)."""
+    biz = (await db.execute(select(Business).limit(1))).scalar_one_or_none()
+    if not biz:
+        return []
+    result = await db.execute(
+        select(Agent).where(Agent.business_id == biz.id).order_by(Agent.created_at)
+    )
+    agents = result.scalars().all()
+    # eager-load configs
+    for a in agents:
+        await db.refresh(a, ["config"])
+    return [_agent_to_dict(a) for a in agents]
+
+
+@router.post("/public/create", status_code=201)
+async def create_agent_public(
+    body: CreateAgentRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create an agent for the first business — no auth (dev mode)."""
+    biz = (await db.execute(select(Business).limit(1))).scalar_one_or_none()
+    if not biz:
+        raise HTTPException(status_code=400, detail="No business found. Create a business first via /businesses/public/setup.")
+
+    try:
+        agent_type_enum = AgentType(body.agent_type)
+    except ValueError:
+        agent_type_enum = AgentType.RECEPTIONIST
+
+    agent = Agent(
+        business_id=biz.id,
+        name=body.name,
+        agent_type=agent_type_enum,
+        status=AgentStatus.ACTIVE,
+        is_active=True,
+        phone_number=body.phone_number,
+    )
+    db.add(agent)
+    await db.flush()
+
+    config = AgentConfig(
+        agent_id=agent.id,
+        greeting_message=body.greeting_message or f"Hello! I'm {body.name}, your AI assistant. How can I help you today?",
+        system_prompt=body.system_prompt,
+        language=body.language,
+        voice_id=body.voice_id or "Polly.Aditi",
+        persona=body.persona or {},
+        allowed_tools=body.allowed_tools or ["search", "calendar", "crm", "whatsapp"],
+        escalation_triggers=body.escalation_triggers or ["speak to human", "manager", "complaint"],
+    )
+    db.add(config)
+    await db.flush()
+    await db.refresh(agent, ["config"])
+    return _agent_to_dict(agent)
+
+
+@router.patch("/public/{agent_id}")
+async def update_agent_public(
+    agent_id: uuid.UUID,
+    body: UpdateAgentRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an agent — no auth (dev mode)."""
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if body.name is not None:
+        agent.name = body.name
+    if body.phone_number is not None:
+        agent.phone_number = body.phone_number
+    if body.is_active is not None:
+        agent.is_active = body.is_active
+    if body.status is not None:
+        try:
+            agent.status = AgentStatus(body.status)
+        except ValueError:
+            pass
+    if body.agent_type is not None:
+        try:
+            agent.agent_type = AgentType(body.agent_type)
+        except ValueError:
+            pass
+
+    # Update config
+    cfg_result = await db.execute(select(AgentConfig).where(AgentConfig.agent_id == agent_id))
+    cfg = cfg_result.scalar_one_or_none()
+    if not cfg:
+        cfg = AgentConfig(agent_id=agent.id)
+        db.add(cfg)
+    if body.greeting_message is not None:
+        cfg.greeting_message = body.greeting_message
+    if body.system_prompt is not None:
+        cfg.system_prompt = body.system_prompt
+    if body.language is not None:
+        cfg.language = body.language
+    if body.voice_id is not None:
+        cfg.voice_id = body.voice_id
+    if body.persona is not None:
+        cfg.persona = body.persona
+    if body.allowed_tools is not None:
+        cfg.allowed_tools = body.allowed_tools
+    if body.escalation_triggers is not None:
+        cfg.escalation_triggers = body.escalation_triggers
+
+    await db.flush()
+    await db.refresh(agent, ["config"])
+    return _agent_to_dict(agent)
+
+
+@router.delete("/public/{agent_id}", status_code=204)
+async def delete_agent_public(
+    agent_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete an agent — no auth (dev mode)."""
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    await db.delete(agent)
+    await db.flush()
+    return

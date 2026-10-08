@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CheckCircle, AlertCircle, RefreshCw, ExternalLink, Plug, Zap } from "lucide-react";
+import { CheckCircle, AlertCircle, RefreshCw, ExternalLink, Plug, Zap, Activity } from "lucide-react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -18,13 +18,12 @@ interface IntegrationStatus {
   error_message: string | null;
 }
 
-// Static metadata for integrations not in the env-based list
 const STATIC_INTEGRATIONS: IntegrationStatus[] = [
   {
     id: "static-pgvector",
     integration_type: "pgvector",
     display_name: "PostgreSQL + pgvector",
-    status: "connected", // if backend is up, this is connected
+    status: "connected",
     icon: "🗄️",
     description: "Vector embeddings storage and semantic similarity search for RAG",
     config_keys: ["DATABASE_URL"],
@@ -47,20 +46,20 @@ const STATIC_INTEGRATIONS: IntegrationStatus[] = [
 ];
 
 const statusInfo: Record<string, { label: string; cls: string }> = {
-  connected:    { label: "Connected",    cls: "badge-green" },
-  disconnected: { label: "Not Connected",cls: "badge-blue"  },
-  error:        { label: "Error",        cls: "badge-red"   },
-  pending:      { label: "Pending",      cls: "badge-amber" },
+  connected:    { label: "Connected",     cls: "badge-green" },
+  disconnected: { label: "Not Connected", cls: "badge-blue"  },
+  error:        { label: "Error",         cls: "badge-red"   },
+  pending:      { label: "Pending",       cls: "badge-amber" },
 };
 
 const integrationColor: Record<string, string> = {
-  twilio:          "#ef4444",
-  gemini:          "#a855f7",
-  hubspot:         "#f59e0b",
-  google_calendar: "#4f6eff",
-  whatsapp:        "#22d3a0",
-  pgvector:        "#22d3a0",
-  redis:           "#f59e0b",
+  twilio:          "var(--red)",
+  gemini:          "var(--purple)",
+  hubspot:         "var(--amber)",
+  google_calendar: "var(--blue)",
+  whatsapp:        "var(--green)",
+  pgvector:        "var(--cyan)",
+  redis:           "var(--amber)",
 };
 
 const setupLinks: Record<string, string> = {
@@ -72,7 +71,7 @@ const setupLinks: Record<string, string> = {
 
 export default function Integrations() {
   const [integrations, setIntegrations] = useState<IntegrationStatus[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]           = useState(true);
   const [backendOnline, setBackendOnline] = useState(false);
 
   const load = useCallback(async () => {
@@ -80,7 +79,6 @@ export default function Integrations() {
       const res = await fetch(`${API}/api/v1/integrations/public/list`);
       if (!res.ok) throw new Error(`${res.status}`);
       const data: IntegrationStatus[] = await res.json();
-      // Merge static items
       const merged = [
         ...data,
         ...STATIC_INTEGRATIONS.filter(
@@ -90,14 +88,13 @@ export default function Integrations() {
       setIntegrations(merged);
       setBackendOnline(true);
     } catch {
-      // Backend not running — show placeholder state
-      setIntegrations([
-        ...STATIC_INTEGRATIONS.map((i) => ({
+      setIntegrations(
+        STATIC_INTEGRATIONS.map((i) => ({
           ...i,
           status: "disconnected" as const,
           error_message: "Backend not running",
-        })),
-      ]);
+        }))
+      );
       setBackendOnline(false);
     } finally {
       setLoading(false);
@@ -114,45 +111,43 @@ export default function Integrations() {
   const disconnected = integrations.filter((i) => i.status !== "connected").length;
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
-          <h2 className="text-lg font-semibold text-white">Integrations</h2>
-          <p className="text-xs mt-0.5" style={{ color: "rgba(226,232,240,0.4)" }}>
-            Connect your business tools — AI Employee coordinates across all of them
+          <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--text)", letterSpacing: "-0.025em" }}>
+            Integrations
+          </h1>
+          <p style={{ fontSize: "12px", color: "var(--text-3)", marginTop: 3 }}>
+            Connect your business tools — AI operators coordinate across all of them
           </p>
         </div>
         <button
           onClick={load}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all"
-          style={{
-            background: "rgba(79,110,255,0.1)",
-            color: "#6b8fff",
-            border: "1px solid rgba(79,110,255,0.2)",
-          }}
+          className="btn btn-ghost btn-sm"
+          style={{ gap: 6 }}
         >
-          <RefreshCw size={11} /> Refresh
+          <RefreshCw size={12} />
+          Refresh
         </button>
       </div>
 
       {/* Backend status banner */}
       {!loading && (
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs"
-          style={{
-            background: backendOnline ? "rgba(34,211,160,0.06)" : "rgba(239,68,68,0.06)",
-            border: `1px solid ${backendOnline ? "rgba(34,211,160,0.2)" : "rgba(239,68,68,0.2)"}`,
-          }}
-        >
-          <span
-            className="w-2 h-2 rounded-full flex-shrink-0"
-            style={{ background: backendOnline ? "#22d3a0" : "#ef4444" }}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 14px", borderRadius: "var(--r-lg)",
+          background: backendOnline ? "var(--green-dim)" : "var(--red-dim)",
+          border: `1px solid ${backendOnline ? "rgba(34,197,94,0.2)" : "rgba(239,68,68,0.2)"}`,
+        }}>
+          <span className={`status-dot ${backendOnline ? "active" : ""}`}
+            style={!backendOnline ? { background: "var(--red)" } : undefined}
           />
-          <span style={{ color: backendOnline ? "#22d3a0" : "#ef4444", fontWeight: 600 }}>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: backendOnline ? "var(--green)" : "var(--red)" }}>
             Backend {backendOnline ? "Online" : "Offline"}
           </span>
-          <span style={{ color: "rgba(226,232,240,0.5)" }}>
+          <span style={{ fontSize: "12px", color: "var(--text-3)" }}>
             {backendOnline
               ? `Showing real config from .env — ${connected} connected, ${disconnected} not configured`
               : "Start the FastAPI backend to see real integration status"}
@@ -161,83 +156,102 @@ export default function Integrations() {
       )}
 
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
         {[
-          { label: "Connected",     value: connected,    color: "#22d3a0" },
-          { label: "Not Configured",value: disconnected, color: "#ef4444" },
-          { label: "Total",         value: integrations.length, color: "#4f6eff" },
-        ].map((s) => (
-          <div key={s.label} className="glass-card p-4 stat-card">
-            <p className="text-2xl font-bold" style={{ color: s.color }}>{s.value}</p>
-            <p className="text-xs mt-1" style={{ color: "rgba(226,232,240,0.5)" }}>
-              {s.label}
-            </p>
+          { label: "Connected",      value: connected,           color: "var(--green)"  },
+          { label: "Not Configured", value: disconnected,        color: "var(--red)"    },
+          { label: "Total",          value: integrations.length, color: "var(--brand)"  },
+        ].map((s, i) => (
+          <div
+            key={s.label}
+            className="card fade-in-up"
+            style={{ padding: "16px 18px", animationDelay: `${i * 0.04}s`, opacity: 0 }}
+          >
+            <p style={{ fontSize: "1.6rem", fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</p>
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: 5 }}>{s.label}</p>
           </div>
         ))}
       </div>
 
       {/* Integration cards */}
       {loading ? (
-        <div className="text-center py-10" style={{ color: "rgba(226,232,240,0.4)" }}>
-          Loading integration status...
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton" style={{ height: 160, borderRadius: "var(--r-xl)" }} />
+          ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
-          {integrations.map((item) => {
-            const ss = statusInfo[item.status] ?? statusInfo.pending;
-            const color = integrationColor[item.integration_type] ?? "#888";
-            const link = setupLinks[item.integration_type];
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12 }}>
+          {integrations.map((item, idx) => {
+            const ss    = statusInfo[item.status] ?? statusInfo.pending;
+            const color = integrationColor[item.integration_type] ?? "var(--text-3)";
+            const link  = setupLinks[item.integration_type];
+            const isConnected = item.status === "connected";
+            const isError     = item.status === "error";
 
             return (
               <div
                 key={item.id}
                 id={`integration-${item.integration_type}`}
-                className="glass-card p-5 transition-all"
+                className="card fade-in-up"
                 style={{
-                  borderColor: item.status === "connected"
-                    ? `${color}30`
-                    : "rgba(255,255,255,0.06)",
+                  padding: "18px 20px",
+                  border: `1px solid ${isConnected ? `${color}30` : "var(--border)"}`,
+                  background: isConnected ? `${color}06` : "var(--surface)",
+                  animationDelay: `${idx * 0.05}s`,
+                  opacity: 0,
+                  transition: "border-color 0.2s, transform 0.2s",
+                  display: "flex", flexDirection: "column", gap: 12,
                 }}
+                onMouseOver={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
+                onMouseOut={(e) => (e.currentTarget.style.transform = "translateY(0)")}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
-                      style={{ background: `${color}15` }}
-                    >
+                {/* Top row: icon + name + status indicator */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{
+                      width: 38, height: 38, borderRadius: "var(--r-lg)",
+                      background: `${color}15`,
+                      border: `1px solid ${color}25`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "18px", flexShrink: 0,
+                    }}>
                       {item.icon}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-white">{item.display_name}</p>
-                      <span className={`badge ${ss.cls}`} style={{ fontSize: "0.6rem" }}>
+                      <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>
+                        {item.display_name}
+                      </p>
+                      <span className={`badge ${ss.cls}`} style={{ marginTop: 3, fontSize: "10px" }}>
                         {ss.label}
                       </span>
                     </div>
                   </div>
-                  {item.status === "connected" ? (
-                    <CheckCircle size={16} style={{ color: "#22d3a0", flexShrink: 0 }} />
-                  ) : item.status === "error" ? (
-                    <AlertCircle size={16} style={{ color: "#ef4444", flexShrink: 0 }} />
+                  {isConnected ? (
+                    <CheckCircle size={15} color="var(--green)" />
+                  ) : isError ? (
+                    <AlertCircle size={15} color="var(--red)" />
                   ) : (
-                    <Plug size={16} style={{ color: "rgba(226,232,240,0.25)", flexShrink: 0 }} />
+                    <Plug size={15} color="var(--text-4)" />
                   )}
                 </div>
 
-                <p className="text-xs mb-3" style={{ color: "rgba(226,232,240,0.5)" }}>
+                {/* Description */}
+                <p style={{ fontSize: "12px", color: "var(--text-3)", lineHeight: 1.5 }}>
                   {item.description}
                 </p>
 
                 {/* Config keys */}
                 {item.config_keys && item.config_keys.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-3">
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                     {item.config_keys.map((k) => (
                       <span
                         key={k}
-                        className="text-xs font-mono px-1.5 py-0.5 rounded"
                         style={{
-                          background: "rgba(255,255,255,0.04)",
-                          color: "rgba(226,232,240,0.4)",
-                          border: "1px solid rgba(255,255,255,0.06)",
+                          fontSize: "10px", fontFamily: "monospace",
+                          padding: "2px 7px", borderRadius: "var(--r-xs)",
+                          background: "var(--surface-3)", color: "var(--text-3)",
+                          border: "1px solid var(--border)",
                         }}
                       >
                         {k}
@@ -246,30 +260,35 @@ export default function Integrations() {
                   </div>
                 )}
 
-                {item.error_message && (
-                  <p className="text-xs mb-3" style={{ color: "#ef4444" }}>
+                {/* Error message */}
+                {item.error_message && item.error_message !== "Backend not running" && (
+                  <p style={{ fontSize: "11px", color: "var(--red)" }}>
                     ⚠ {item.error_message}
                   </p>
                 )}
 
-                <div className="flex items-center justify-between">
-                  <p className="text-xs" style={{ color: "rgba(226,232,240,0.3)" }}>
+                {/* Footer: last sync + setup link */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "auto" }}>
+                  <p style={{ fontSize: "11px", color: "var(--text-4)" }}>
                     {item.last_synced_at
-                      ? `Last sync: ${new Date(item.last_synced_at).toLocaleTimeString()}`
-                      : item.status === "connected"
-                        ? "Active"
-                        : "Set in .env to connect"}
+                      ? `Synced ${new Date(item.last_synced_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`
+                      : isConnected
+                      ? "Active"
+                      : "Set in .env to connect"}
                   </p>
                   {link && !item.configured && (
                     <a
                       href={link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg transition-all"
                       style={{
-                        background: `${color}12`,
-                        color,
+                        display: "inline-flex", alignItems: "center", gap: 5,
+                        fontSize: "11px", fontWeight: 600,
+                        padding: "4px 10px", borderRadius: "var(--r)",
+                        background: `${color}12`, color,
                         border: `1px solid ${color}25`,
+                        textDecoration: "none",
+                        transition: "background 0.15s",
                       }}
                     >
                       <ExternalLink size={10} /> Setup
@@ -284,19 +303,25 @@ export default function Integrations() {
 
       {/* Architecture diagram */}
       <div
-        className="glass-card p-5"
-        style={{ borderColor: "rgba(168,85,247,0.2)", background: "rgba(168,85,247,0.03)" }}
+        className="card"
+        style={{
+          padding: "16px 20px",
+          border: "1px solid rgba(168,85,247,0.2)",
+          background: "rgba(168,85,247,0.04)",
+        }}
       >
-        <div className="flex items-center gap-2 mb-3">
-          <Zap size={14} style={{ color: "#a855f7" }} />
-          <h3 className="text-xs font-semibold text-white">AI Employee Integration Architecture</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+          <Activity size={13} color="var(--purple)" />
+          <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>
+            Integration Architecture
+          </p>
         </div>
-        <p className="text-xs" style={{ color: "rgba(226,232,240,0.45)" }}>
-          Customer → Twilio Voice → FastAPI Webhook → LangGraph Orchestrator → [CRM · Calendar · WhatsApp · RAG] → Response
+        <p style={{ fontSize: "11px", color: "var(--text-3)", lineHeight: 1.7, fontFamily: "monospace" }}>
+          Customer → Twilio Voice → FastAPI Webhook → LangGraph Orchestrator
+          → [CRM · Calendar · WhatsApp · RAG] → Response
         </p>
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -1,27 +1,16 @@
 "use client";
-
 import { useState, useRef, useCallback, useEffect } from "react";
-import {
-  Upload, FileText, Trash2,
-  Search, CheckCircle, Loader, BookOpen, Zap, AlertCircle, RefreshCw,
-} from "lucide-react";
-import {
-  fetchKnowledgeDocs,
-  uploadKnowledgeDoc,
-  deleteKnowledgeDoc,
-  type KnowledgeDoc,
-  fmtBytes,
-} from "@/lib/api";
+import { Upload, FileText, Trash2, Search, BookOpen, AlertCircle, RefreshCw, Loader2, Check } from "lucide-react";
+import { fetchKnowledgeDocs, uploadKnowledgeDoc, deleteKnowledgeDoc, type KnowledgeDoc, fmtBytes } from "@/lib/api";
 
 const typeColor: Record<string, string> = {
-  pdf: "#ef4444", csv: "#22d3a0", txt: "#f59e0b", docx: "#4f6eff",
+  pdf: "var(--red)", csv: "var(--green)", txt: "var(--amber)", docx: "var(--blue)",
 };
-
-const statusStyle: Record<string, { label: string; cls: string }> = {
-  indexed:    { label: "Indexed",    cls: "badge-green" },
-  processing: { label: "Processing", cls: "badge-blue"  },
-  pending:    { label: "Pending",    cls: "badge-amber" },
-  failed:     { label: "Failed",     cls: "badge-red"   },
+const statusMap: Record<string, { cls: string; label: string }> = {
+  indexed:    { cls: "badge-green", label: "Indexed"    },
+  processing: { cls: "badge-blue",  label: "Processing" },
+  pending:    { cls: "badge-amber", label: "Pending"    },
+  failed:     { cls: "badge-red",   label: "Failed"     },
 };
 
 export default function KnowledgeBase() {
@@ -35,394 +24,208 @@ export default function KnowledgeBase() {
 
   const loadDocs = useCallback(async () => {
     try {
-      const data = await fetchKnowledgeDocs();
-      setDocs(data);
+      setDocs(await fetchKnowledgeDocs());
       setError(null);
-    } catch {
-      setError("Backend not reachable — showing local state only.");
-    } finally {
-      setLoading(false);
-    }
+    } catch { setError("Backend not reachable — showing local state only."); }
+    finally { setLoading(false); }
   }, []);
 
-  // Poll every 5s while any doc is processing/pending (to detect when indexing finishes)
   useEffect(() => {
     loadDocs();
     const t = setInterval(() => {
-      const hasProcessing = docs.some(
-        (d) => d.status === "processing" || d.status === "pending"
-      );
+      const hasProcessing = docs.some((d) => d.status === "processing" || d.status === "pending");
       if (hasProcessing) loadDocs();
     }, 5_000);
     return () => clearInterval(t);
   }, [loadDocs, docs]);
 
-  const filtered = docs.filter(
-    (d) =>
-      d.title.toLowerCase().includes(search.toLowerCase()) ||
-      (d.file_name ?? "").toLowerCase().includes(search.toLowerCase())
+  const filtered = docs.filter((d) =>
+    d.title.toLowerCase().includes(search.toLowerCase()) ||
+    (d.file_name ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalChunks  = docs.reduce((s, d) => s + (d.chunk_count ?? 0), 0);
+  const totalChunks = docs.reduce((s, d) => s + (d.chunk_count ?? 0), 0);
   const indexedCount = docs.filter((d) => d.status === "indexed").length;
-  const processingCnt = docs.filter(
-    (d) => d.status === "processing" || d.status === "pending"
-  ).length;
 
-  const handleFiles = useCallback(
-    async (files: File[]) => {
-      if (!files.length) return;
-      setUploading(true);
-      setError(null);
-      try {
-        for (const file of files) {
-          const title = file.name.replace(/\.[^.]+$/, ""); // strip extension
-          const created = await uploadKnowledgeDoc(file, title);
-          setDocs((prev) => [
-            {
-              ...created,
-              file_name: file.name,
-              file_size_bytes: file.size,
-              chunk_count: null,
-              error: null,
-            },
-            ...prev,
-          ]);
-        }
-        // Start polling for status updates
-        setTimeout(loadDocs, 2_000);
-      } catch (e) {
-        setError(
-          "Upload failed. Make sure the backend is running at http://localhost:8000."
-        );
-      } finally {
-        setUploading(false);
-      }
-    },
-    [loadDocs]
-  );
-
-  const handleDelete = useCallback(async (docId: string) => {
-    // Optimistic remove
-    setDocs((prev) => prev.filter((d) => d.id !== docId));
+  const handleFiles = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+    setUploading(true); setError(null);
     try {
-      await deleteKnowledgeDoc(docId);
-    } catch {
-      // Re-load if delete failed
-      loadDocs();
-    }
+      for (const file of files) {
+        const title = file.name.replace(/\.[^.]+$/, "");
+        const created = await uploadKnowledgeDoc(file, title);
+        setDocs((prev) => [{ ...created, file_name: file.name, file_size_bytes: file.size, chunk_count: null, error: null }, ...prev]);
+      }
+      setTimeout(loadDocs, 2_000);
+    } catch { setError("Upload failed. Make sure the backend is running."); }
+    finally { setUploading(false); }
   }, [loadDocs]);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      handleFiles(Array.from(e.dataTransfer.files));
-    },
-    [handleFiles]
-  );
+  const handleDelete = useCallback(async (docId: string) => {
+    setDocs((prev) => prev.filter((d) => d.id !== docId));
+    try { await deleteKnowledgeDoc(docId); } catch { loadDocs(); }
+  }, [loadDocs]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(false);
+    handleFiles(Array.from(e.dataTransfer.files));
+  }, [handleFiles]);
 
   return (
-    <div className="space-y-6">
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex-between fade-in-up" style={{ opacity: 0 }}>
         <div>
-          <h2 className="text-lg font-semibold text-white">Knowledge Base</h2>
-          <p className="text-xs mt-0.5" style={{ color: "rgba(226,232,240,0.4)" }}>
-            Upload documents — AI searches them semantically on every call (pgvector RAG)
-          </p>
+          <h1 className="page-title">Knowledge</h1>
+          <p className="page-subtitle">Documents and sources your operators use to answer questions.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={loadDocs}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all"
-            style={{
-              background: "rgba(79,110,255,0.08)",
-              color: "#6b8fff",
-              border: "1px solid rgba(79,110,255,0.15)",
-            }}
-          >
-            <RefreshCw size={11} /> Refresh
+        <div className="flex-gap-8">
+          <button className="icon-btn" onClick={loadDocs} title="Refresh">
+            <RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
           </button>
-          <button
-            id="knowledge-upload-btn"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold"
-            style={{
-              background: "linear-gradient(135deg,#4f6eff,#22d3a0)",
-              color: "#fff",
-              boxShadow: "0 0 20px rgba(79,110,255,0.3)",
-            }}
-          >
-            <Upload size={14} /> Upload Document
+          <button className="btn btn-primary btn-md" style={{ gap: 6 }} onClick={() => fileInputRef.current?.click()}>
+            <Upload size={13} /> Add Knowledge
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept=".pdf,.csv,.txt,.docx"
-            className="hidden"
-            onChange={(e) => handleFiles(Array.from(e.target.files || []))}
-          />
+          <input ref={fileInputRef} type="file" multiple accept=".pdf,.txt,.csv,.docx" style={{ display: "none" }}
+            onChange={(e) => handleFiles(Array.from(e.target.files ?? []))} />
         </div>
       </div>
 
-      {/* Error banner */}
-      {error && (
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-xl text-xs"
-          style={{
-            background: "rgba(239,68,68,0.08)",
-            border: "1px solid rgba(239,68,68,0.2)",
-            color: "#ef4444",
-          }}
-        >
-          <AlertCircle size={14} />
-          {error}
-        </div>
-      )}
-
-      {/* Stats row */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {[
-          { label: "Documents",     value: docs.length,                       color: "#4f6eff", Icon: BookOpen    },
-          { label: "Indexed",       value: indexedCount,                      color: "#22d3a0", Icon: CheckCircle },
-          { label: "Processing",    value: processingCnt,                     color: "#f59e0b", Icon: Loader      },
-          { label: "Vector Chunks", value: totalChunks.toLocaleString("en-IN"), color: "#a855f7", Icon: Zap       },
-        ].map(({ label, value, color, Icon }) => (
-          <div key={label} className="glass-card stat-card p-4">
-            <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ background: `${color}18` }}
-              >
-                <Icon size={15} style={{ color }} />
-              </div>
-              <div>
-                <p className="text-xl font-bold text-white">{value}</p>
-                <p className="text-xs" style={{ color: "rgba(226,232,240,0.45)" }}>
-                  {label}
-                </p>
-              </div>
-            </div>
+          { label: "Documents",    value: docs.length,   color: "var(--blue)"   },
+          { label: "Indexed",      value: indexedCount,  color: "var(--green)"  },
+          { label: "Total Chunks", value: totalChunks,   color: "var(--purple)" },
+        ].map((m, i) => (
+          <div key={m.label} className="stat-card fade-in-up" style={{ animationDelay: `${i * 0.04}s`, opacity: 0 }}>
+            <p className="metric-value" style={{ color: m.color }}>{m.value}</p>
+            <p className="metric-label">{m.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Drop zone + document list */}
-      <div className="grid grid-cols-3 gap-6">
-        {/* Drop zone */}
-        <div
-          id="knowledge-dropzone"
-          className="col-span-1 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-200 p-8"
-          style={{
-            borderColor: dragOver ? "rgba(79,110,255,0.8)" : "rgba(107,143,255,0.2)",
-            background:  dragOver ? "rgba(79,110,255,0.07)" : "rgba(13,20,40,0.4)",
-            minHeight: 220,
-          }}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
-        >
-          {uploading ? (
-            <div className="text-center">
-              <Loader
-                size={28}
-                style={{
-                  color: "#4f6eff",
-                  margin: "0 auto 8px",
-                  animation: "spin 1s linear infinite",
-                }}
-              />
-              <p className="text-sm" style={{ color: "#4f6eff" }}>Uploading...</p>
-              <p className="text-xs mt-1" style={{ color: "rgba(226,232,240,0.4)" }}>
-                Starting RAG ingestion
-              </p>
-            </div>
-          ) : (
-            <>
-              <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-                style={{ background: "rgba(79,110,255,0.12)" }}
-              >
-                <Upload size={24} style={{ color: "#4f6eff" }} />
-              </div>
-              <p className="text-sm font-semibold text-white mb-1">Drop files here</p>
-              <p className="text-xs text-center" style={{ color: "rgba(226,232,240,0.4)" }}>
-                PDF, CSV, DOCX, TXT
-              </p>
-              <div
-                className="mt-4 px-4 py-1.5 rounded-full text-xs font-semibold"
-                style={{
-                  background: "rgba(79,110,255,0.15)",
-                  color: "#4f6eff",
-                  border: "1px solid rgba(79,110,255,0.3)",
-                }}
-              >
-                Browse files
-              </div>
-              <p className="text-xs mt-4 text-center" style={{ color: "rgba(226,232,240,0.25)" }}>
-                AI will index and search these during every call
-              </p>
-            </>
-          )}
+      {error && (
+        <div style={{ display: "flex", gap: 8, padding: "10px 14px", background: "var(--amber-dim)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: "var(--r)" }}>
+          <AlertCircle size={14} color="var(--amber)" />
+          <p style={{ fontSize: "12px", color: "var(--amber)" }}>{error}</p>
         </div>
+      )}
 
-        {/* Document list */}
-        <div className="col-span-2 space-y-3">
-          <div className="relative">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2"
-              style={{ color: "rgba(226,232,240,0.4)" }}
-            />
-            <input
-              id="knowledge-search"
-              type="text"
-              placeholder="Search documents..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none"
-              style={{
-                background: "rgba(13,20,40,0.7)",
-                border: "1px solid rgba(107,143,255,0.15)",
-                color: "#e2e8f0",
-              }}
-            />
-          </div>
-
-          <div
-            className="glass-card divide-y"
-            style={{
-              borderColor: "rgba(255,255,255,0.04)",
-              maxHeight: 360,
-              overflowY: "auto",
-            }}
-          >
-            {loading ? (
-              <div className="p-8 text-center" style={{ color: "rgba(226,232,240,0.4)" }}>
-                Loading documents...
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="p-8 text-center" style={{ color: "rgba(226,232,240,0.35)" }}>
-                {docs.length === 0
-                  ? "No documents yet. Upload a PDF or CSV to get started."
-                  : "No documents matching your search."}
-              </div>
-            ) : (
-              filtered.map((doc) => {
-                const ss = statusStyle[doc.status] ?? statusStyle.pending;
-                const color = typeColor[doc.file_type] ?? "#888";
-                return (
-                  <div
-                    key={doc.id}
-                    id={`doc-${doc.id}`}
-                    className="flex items-center gap-4 p-4"
-                  >
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ background: `${color}18` }}
-                    >
-                      <FileText size={15} style={{ color }} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-sm font-medium text-white truncate">{doc.title}</p>
-                        <span
-                          className={`badge ${ss.cls}`}
-                          style={{ fontSize: "0.6rem", flexShrink: 0 }}
-                        >
-                          {ss.label}
-                        </span>
-                      </div>
-                      <p
-                        className="text-xs truncate"
-                        style={{ color: "rgba(226,232,240,0.45)" }}
-                      >
-                        {doc.file_name ?? "—"}
-                        {doc.error && (
-                          <span className="ml-2" style={{ color: "#ef4444" }}>
-                            ⚠ {doc.error}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex-shrink-0 text-right">
-                      <p className="text-xs" style={{ color: "rgba(226,232,240,0.4)" }}>
-                        {fmtBytes(doc.file_size_bytes)}
-                      </p>
-                      {(doc.chunk_count ?? 0) > 0 && (
-                        <p
-                          className="text-xs font-mono"
-                          style={{ color: "#a855f7" }}
-                        >
-                          {doc.chunk_count} chunks
-                        </p>
-                      )}
-                      <p
-                        className="text-xs"
-                        style={{ color: "rgba(226,232,240,0.25)" }}
-                      >
-                        {doc.created_at.slice(0, 10)}
-                      </p>
-                    </div>
-                    <button
-                      id={`delete-doc-${doc.id}`}
-                      onClick={() => handleDelete(doc.id)}
-                      className="p-1.5 rounded-lg transition-all hover:bg-red-500/10"
-                      style={{ color: "rgba(239,68,68,0.5)" }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* RAG info bar */}
+      {/* Drop zone */}
       <div
-        className="glass-card p-4 flex items-center gap-4"
+        onDrop={handleDrop}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onClick={() => fileInputRef.current?.click()}
         style={{
-          borderColor: "rgba(168,85,247,0.2)",
-          background: "rgba(168,85,247,0.04)",
+          border: `1.5px dashed ${dragOver ? "var(--brand)" : "var(--border)"}`,
+          borderRadius: "var(--r-xl)", padding: "28px 24px", textAlign: "center",
+          cursor: "pointer", background: dragOver ? "var(--brand-dim)" : "transparent",
+          transition: "all 0.15s",
         }}
       >
-        <div
-          className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: "rgba(168,85,247,0.15)" }}
-        >
-          <Zap size={16} style={{ color: "#a855f7" }} />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-semibold text-white">Semantic Search Active</p>
-          <p className="text-xs" style={{ color: "rgba(226,232,240,0.45)" }}>
-            {totalChunks.toLocaleString("en-IN")} vector embeddings · pgvector · Top-K=5 · Cosine similarity · Gemini re-ranking
-          </p>
-        </div>
-        <div
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-          style={{
-            background: indexedCount > 0
-              ? "rgba(34,211,160,0.1)"
-              : "rgba(226,232,240,0.05)",
-            border: `1px solid ${indexedCount > 0 ? "rgba(34,211,160,0.3)" : "rgba(226,232,240,0.1)"}`,
-          }}
-        >
-          {indexedCount > 0 && <span className="live-dot-inner" />}
-          <span
-            className="text-xs font-semibold"
-            style={{ color: indexedCount > 0 ? "#22d3a0" : "rgba(226,232,240,0.4)" }}
-          >
-            {indexedCount > 0 ? "RAG ONLINE" : "NO DOCS INDEXED"}
-          </span>
-        </div>
+        {uploading ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <Loader2 size={22} color="var(--text-3)" style={{ animation: "spin 1s linear infinite" }} />
+            <p style={{ fontSize: "13px", color: "var(--text-3)" }}>Uploading and indexing…</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <Upload size={22} color="var(--text-3)" />
+            <p style={{ fontSize: "13px", color: "var(--text-2)", fontWeight: 500 }}>Drop files here or click to upload</p>
+            <p style={{ fontSize: "11px", color: "var(--text-3)" }}>Supports PDF, TXT, CSV, DOCX</p>
+          </div>
+        )}
       </div>
 
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      {/* Search */}
+      <div style={{ position: "relative" }}>
+        <Search size={13} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--text-3)" }} />
+        <input className="input" placeholder="Search documents…" value={search} onChange={(e) => setSearch(e.target.value)} style={{ paddingLeft: 34 }} />
+      </div>
+
+      {/* Doc list */}
+      <div className="card fade-in-up" style={{ padding: 0, overflow: "hidden", opacity: 0, animationDelay: "0.16s" }}>
+        {loading ? (
+          <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+            {[1,2,3].map((i) => <div key={i} className="skeleton" style={{ height: 54, borderRadius: "var(--r)" }} />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state" style={{ minHeight: 200 }}>
+            <BookOpen size={28} />
+            <p>{search ? "No documents match your search." : "No documents yet. Upload files to give your operators knowledge."}</p>
+          </div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                {["Document","Type","Size","Chunks","Status","Added"].map((h) => <th key={h}>{h}</th>)}
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((doc) => {
+                const ext = (doc.file_name ?? doc.title).split(".").pop()?.toLowerCase() ?? "txt";
+                const sm = statusMap[doc.status] ?? { cls: "badge-gray", label: doc.status };
+                return (
+                  <tr key={doc.id}>
+                    <td>
+                      <div className="flex-gap-8">
+                        <div style={{
+                          width: 28, height: 28, borderRadius: "var(--r-sm)",
+                          background: `${typeColor[ext] ?? "var(--text-3)"}15`,
+                          border: `1px solid ${typeColor[ext] ?? "var(--border)"}30`,
+                          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                        }}>
+                          <FileText size={13} color={typeColor[ext] ?? "var(--text-3)"} />
+                        </div>
+                        <div>
+                          <p style={{ fontSize: "13px", fontWeight: 500, color: "var(--text)" }}>{doc.title}</p>
+                          {doc.file_name && (
+                            <p style={{ fontSize: "11px", color: "var(--text-3)" }}>{doc.file_name}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td><span style={{ fontSize: "11px", color: "var(--text-3)", textTransform: "uppercase", fontFamily: "monospace" }}>{ext}</span></td>
+                    <td><span style={{ fontSize: "12px", color: "var(--text-3)" }}>{doc.file_size_bytes ? fmtBytes(doc.file_size_bytes) : "—"}</span></td>
+                    <td>
+                      <span style={{ fontSize: "12px", fontWeight: 500, color: doc.chunk_count ? "var(--green)" : "var(--text-3)" }}>
+                        {doc.chunk_count != null ? doc.chunk_count : (doc.status === "processing" ? "…" : "—")}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`badge ${sm.cls}`} style={{ gap: 4 }}>
+                        {doc.status === "processing" && <Loader2 size={9} style={{ animation: "spin 1s linear infinite" }} />}
+                        {doc.status === "indexed" && <Check size={9} />}
+                        {sm.label}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: "11px", color: "var(--text-3)" }}>
+                        {doc.created_at ? new Date(doc.created_at).toLocaleDateString("en-IN") : "—"}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="icon-btn"
+                        style={{ color: "var(--red)" }}
+                        onClick={() => handleDelete(doc.id)}
+                        title="Delete"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

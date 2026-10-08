@@ -157,6 +157,77 @@ async def public_get_profile(db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.post("/public/setup", status_code=201)
+async def public_setup(
+    body: CreateBusinessRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    One-shot setup: create a Business + default active Agent.
+    No auth required (dev mode). Safe to call multiple times — returns existing if already set up.
+    """
+    from app.models.agent import Agent, AgentConfig, AgentType, AgentStatus
+
+    existing = (await db.execute(select(Business).where(Business.is_active == True).limit(1))).scalar_one_or_none()
+    if existing:
+        agent_result = await db.execute(select(Agent).where(Agent.business_id == existing.id).limit(1))
+        agent = agent_result.scalar_one_or_none()
+        return {
+            "business_id": str(existing.id),
+            "business_name": existing.name,
+            "agent_id": str(agent.id) if agent else None,
+            "agent_name": agent.name if agent else None,
+            "already_exists": True,
+        }
+
+    slug_base = slugify(body.name)
+    slug = slug_base
+    counter = 1
+    while True:
+        ex = (await db.execute(select(Business).where(Business.slug == slug))).scalar_one_or_none()
+        if not ex:
+            break
+        slug = f"{slug_base}-{counter}"
+        counter += 1
+
+    business = Business(
+        name=body.name, slug=slug, industry=body.industry,
+        phone=body.phone, email=body.email, timezone=body.timezone,
+        services=body.services, status=BusinessStatus.ACTIVE,
+    )
+    db.add(business)
+    await db.flush()
+
+    agent = Agent(
+        business_id=business.id,
+        name=f"{body.name} AI Receptionist",
+        agent_type=AgentType.RECEPTIONIST,
+        status=AgentStatus.ACTIVE,
+        is_active=True,
+    )
+    db.add(agent)
+    await db.flush()
+
+    config = AgentConfig(
+        agent_id=agent.id,
+        greeting_message=f"Hello! Thank you for contacting {body.name}. How can I help you today?",
+        language="en-IN", voice_id="Polly.Aditi",
+        allowed_tools=["search", "calendar", "crm", "whatsapp"],
+        escalation_triggers=["speak to human", "manager", "complaint", "urgent"],
+        persona={"business_name": body.name, "industry": body.industry},
+    )
+    db.add(config)
+    await db.flush()
+
+    return {
+        "business_id": str(business.id),
+        "business_name": business.name,
+        "agent_id": str(agent.id),
+        "agent_name": agent.name,
+        "already_exists": False,
+    }
+
+
 @router.patch("/public/profile", response_model=PublicProfileResponse)
 async def public_update_profile(
     body: PublicProfileUpdate,

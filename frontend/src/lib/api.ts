@@ -74,6 +74,7 @@ export interface AgentRunDetail extends AgentRun {
     status: string;
     latency_ms: number | null;
     created_at: string;
+    success?: boolean | null;
   }[];
 }
 
@@ -102,6 +103,12 @@ export interface RecentCall {
   duration_seconds: number | null;
   ended_at: string | null;
   created_at: string;
+  // Optional enriched fields (may be present in detailed responses)
+  outcome?: string | null;
+  intent?: string | null;
+  started_at?: string;
+  summary?: string | null;
+  transcript?: string | null;
 }
 
 export interface CallStats {

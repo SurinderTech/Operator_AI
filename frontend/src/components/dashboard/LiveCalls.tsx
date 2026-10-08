@@ -1,155 +1,99 @@
 "use client";
-
-import { Phone, User, Brain, Mic, RefreshCw, Clock } from "lucide-react";
+import { Phone, RefreshCw, Clock, Mic, Brain, User, History } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import {
-  fetchLiveCalls,
-  fetchRecentCalls,
-  type LiveCall,
-  type RecentCall,
-  fmtDuration,
-  fmtTime,
+  fetchLiveCalls, fetchRecentCalls,
+  type LiveCall, type RecentCall, fmtDuration, fmtTime,
 } from "@/lib/api";
-
-// ── Live call card ─────────────────────────────────────────────────────────
 
 function LiveCallCard({ call }: { call: LiveCall & { _duration: number } }) {
   const [duration, setDuration] = useState(call._duration);
-
   useEffect(() => {
     const t = setInterval(() => setDuration((d) => d + 1), 1000);
     return () => clearInterval(t);
   }, []);
-
-  const initials = (call.customer_name ?? "?")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = (call.customer_name ?? "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
-    <div
-      id={`live-call-${call.call_id}`}
-      className="glass-card p-5"
-      style={{ borderColor: "rgba(34,211,160,0.25)" }}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white text-sm"
-            style={{ background: "linear-gradient(135deg, #4f6eff, #22d3a0)" }}
-          >
-            {initials}
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white">{call.customer_name}</p>
-            <p className="text-xs" style={{ color: "rgba(226,232,240,0.4)" }}>
-              {call.from_number}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="live-dot-inner" />
-          <span className="text-xs font-bold" style={{ color: "var(--color-accent-green)" }}>
-            LIVE
-          </span>
-          <span className="text-xs font-mono" style={{ color: "rgba(226,232,240,0.6)" }}>
+    <div className="live-call-card active-call fade-in-up" style={{ opacity: 0 }}>
+      {/* Live badge + timer */}
+      <div className="flex-between" style={{ marginBottom: 12 }}>
+        <span className="badge badge-red" style={{ fontWeight: 600 }}>
+          ● LIVE
+        </span>
+        <div className="flex-gap-6">
+          <Clock size={12} color="var(--text-3)" />
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-2)", fontFamily: "monospace" }}>
             {fmtDuration(duration)}
           </span>
         </div>
       </div>
 
-      {/* Intent badge */}
-      <div className="flex items-center gap-2 mb-3">
-        {call.intent ? (
-          <span className="badge badge-blue">{call.intent}</span>
-        ) : (
-          <span className="badge badge-amber">classifying...</span>
-        )}
-      </div>
-
-      {/* AI thinking box */}
-      <div
-        className="rounded-lg p-3"
-        style={{
-          background: "rgba(79,110,255,0.08)",
-          border: "1px solid rgba(79,110,255,0.15)",
-        }}
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <Brain size={12} style={{ color: "#4f6eff" }} />
-          <span className="text-xs font-semibold" style={{ color: "#4f6eff" }}>
-            AI Agent processing...
-          </span>
+      {/* Caller */}
+      <div className="flex-gap-10" style={{ marginBottom: 10 }}>
+        <div style={{
+          width: 36, height: 36, borderRadius: "50%",
+          background: "var(--surface-3)", border: "1px solid var(--border)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: "12px", fontWeight: 600, color: "var(--text-2)", flexShrink: 0,
+        }}>
+          {initials}
         </div>
-        <p className="text-xs" style={{ color: "rgba(226,232,240,0.65)" }}>
-          {call.intent
-            ? `Handling ${call.intent.replace(/_/g, " ")} request`
-            : "Analysing customer input..."}
-        </p>
+        <div>
+          <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text)" }}>{call.customer_name}</p>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", fontFamily: "monospace" }}>{call.from_number}</p>
+        </div>
       </div>
 
-      <div className="flex items-center gap-4 mt-3">
-        <button
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
-          style={{
-            background: "rgba(239,68,68,0.1)",
-            color: "#ef4444",
-            border: "1px solid rgba(239,68,68,0.2)",
-          }}
-        >
-          <User size={11} /> Take Over
-        </button>
-        <button
-          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
-          style={{
-            background: "rgba(107,143,255,0.1)",
-            color: "#6b8fff",
-            border: "1px solid rgba(107,143,255,0.2)",
-          }}
-        >
-          <Mic size={11} /> Listen
-        </button>
+      {/* Intent + waveform */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10 }}>
+        {call.intent && (
+          <span className="badge badge-blue">{call.intent.replace(/_/g, " ")}</span>
+        )}
+        <div className="waveform" style={{ height: 18 }}>
+          {Array.from({ length: 8 }).map((_, i) => <span key={i} />)}
+        </div>
+      </div>
+
+      {/* AI status */}
+      <div style={{
+        padding: "8px 12px",
+        background: "var(--surface-2)", border: "1px solid var(--border)",
+        borderRadius: "var(--r)", display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <Brain size={12} color="var(--green)" />
+        <p style={{ fontSize: "11px", color: "var(--text-3)" }}>
+          AI is handling:{" "}
+          <span style={{ color: "var(--green)", fontWeight: 500 }}>
+            {call.intent ? call.intent.replace(/_/g, " ") : "customer request"}
+          </span>
+        </p>
       </div>
     </div>
   );
 }
 
-// ── Outcome badge ──────────────────────────────────────────────────────────
-
-function outcomeFromStatus(status: string): { label: string; ok: boolean } {
-  switch (status) {
-    case "completed": return { label: "Completed", ok: true };
-    case "no-answer": return { label: "No Answer", ok: false };
-    case "failed":    return { label: "Failed", ok: false };
-    case "busy":      return { label: "Busy", ok: false };
-    default:          return { label: status, ok: true };
-  }
-}
-
-// ── Main component ─────────────────────────────────────────────────────────
+const OUTCOME_BADGE: Record<string, string> = {
+  qualified:    "badge-green",
+  appointment:  "badge-purple",
+  "no-answer":  "badge-gray",
+  escalated:    "badge-amber",
+  completed:    "badge-blue",
+};
 
 export default function LiveCalls() {
-  const [live, setLive] = useState<Array<LiveCall & { _duration: number }>>([]);
+  const [liveCalls, setLiveCalls] = useState<(LiveCall & { _duration: number })[]>([]);
   const [recent, setRecent] = useState<RecentCall[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"live" | "history">("live");
+  const [selectedCall, setSelectedCall] = useState<RecentCall | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [liveData, recentData] = await Promise.all([
-        fetchLiveCalls(),
-        fetchRecentCalls(10),
-      ]);
-      // Attach a local duration tracker so the timer can increment from the
-      // server-provided duration_seconds
-      setLive(liveData.map((c) => ({ ...c, _duration: c.duration_seconds })));
-      setRecent(recentData);
-    } catch {
-      // Backend not up — keep empty (no mock calls shown)
-    } finally {
-      setLoading(false);
-    }
+      const [lc, rc] = await Promise.all([fetchLiveCalls(), fetchRecentCalls(50)]);
+      setLiveCalls(lc.map((c) => ({ ...c, _duration: c.duration_seconds })));
+      setRecent(rc);
+    } catch { /* offline */ } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -158,140 +102,180 @@ export default function LiveCalls() {
     return () => clearInterval(t);
   }, [refresh]);
 
+  const tabs = [
+    { id: "live" as const,    label: "Live Calls",  count: liveCalls.length },
+    { id: "history" as const, label: "Call History", count: recent.length },
+  ];
+
   return (
-    <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold text-white">Live Calls</h1>
-          {live.length > 0 ? (
-            <span className="badge badge-green">🔴 {live.length} ACTIVE</span>
-          ) : (
-            <span className="badge badge-amber">No active calls</span>
-          )}
+      <div className="flex-between fade-in-up" style={{ opacity: 0 }}>
+        <div>
+          <h1 className="page-title">Calls</h1>
+          <p className="page-subtitle">Monitor live calls and review call history.</p>
         </div>
-        <button
-          onClick={refresh}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all"
-          style={{
-            background: "rgba(79,110,255,0.1)",
-            color: "#6b8fff",
-            border: "1px solid rgba(79,110,255,0.2)",
-          }}
-        >
-          <RefreshCw size={11} /> Refresh
+        <button className="icon-btn" onClick={refresh} title="Refresh">
+          <RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
         </button>
       </div>
 
-      {/* Live call cards */}
-      {loading ? (
-        <div
-          className="glass-card p-12 text-center mb-8"
-          style={{ color: "rgba(226,232,240,0.4)" }}
-        >
-          <p className="text-sm">Connecting to backend...</p>
-        </div>
-      ) : live.length === 0 ? (
-        <div
-          className="glass-card p-12 text-center mb-8"
-          style={{ borderColor: "rgba(107,143,255,0.1)" }}
-        >
-          <Phone
-            size={32}
-            className="mx-auto mb-4"
-            style={{ color: "rgba(107,143,255,0.3)" }}
-          />
-          <p className="text-sm font-medium text-white">No active calls right now</p>
-          <p
-            className="text-xs mt-2"
-            style={{ color: "rgba(226,232,240,0.4)" }}
+      {/* Tabs */}
+      <div className="tab-bar">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            className={`tab-item ${tab === t.id ? "active" : ""}`}
+            onClick={() => setTab(t.id)}
           >
-            When a customer calls your Twilio number, it will appear here in real time.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-3 gap-5 mb-8">
-          {live.map((call) => (
-            <LiveCallCard key={call.call_id} call={call} />
-          ))}
+            {t.label}
+            {t.count > 0 && (
+              <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: "10px" }}>{t.count}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Live calls */}
+      {tab === "live" && (
+        <>
+          {loading && (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {[1, 2].map((i) => (
+                <div key={i} className="skeleton" style={{ height: 160, borderRadius: "var(--r-lg)" }} />
+              ))}
+            </div>
+          )}
+          {!loading && liveCalls.length === 0 && (
+            <div className="card empty-state" style={{ minHeight: 280 }}>
+              <Phone size={28} />
+              <p>No active calls right now.<br />Your operators are standing by.</p>
+            </div>
+          )}
+          {!loading && liveCalls.length > 0 && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 12 }}>
+              {liveCalls.map((call) => (
+                <LiveCallCard key={call.call_id} call={call} />
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Call history */}
+      {tab === "history" && (
+        <div style={{ display: "grid", gridTemplateColumns: selectedCall ? "1fr 360px" : "1fr", gap: 14 }}>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            {loading ? (
+              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="skeleton" style={{ height: 52, borderRadius: "var(--r)" }} />
+                ))}
+              </div>
+            ) : recent.length === 0 ? (
+              <div className="empty-state">
+                <History size={28} />
+                <p>No call history yet.</p>
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    {["Caller", "Number", "Duration", "Intent", "Outcome", "Time"].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {recent.map((call) => {
+                    const initials = (call.customer_name ?? "?").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+                    const outcome = call.outcome ?? "completed";
+                    const badgeCls = OUTCOME_BADGE[outcome] ?? "badge-gray";
+                    return (
+                      <tr
+                        key={call.call_id}
+                        style={{ cursor: "pointer", background: selectedCall?.call_id === call.call_id ? "rgba(255,255,255,0.02)" : undefined }}
+                        onClick={() => setSelectedCall(selectedCall?.call_id === call.call_id ? null : call)}
+                      >
+                        <td>
+                          <div className="flex-gap-8">
+                            <div style={{
+                              width: 26, height: 26, borderRadius: "50%",
+                              background: "var(--surface-3)", border: "1px solid var(--border)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              fontSize: "10px", fontWeight: 600, color: "var(--text-2)", flexShrink: 0,
+                            }}>
+                              {initials}
+                            </div>
+                            <span style={{ fontSize: "13px", fontWeight: 500 }}>{call.customer_name ?? "Unknown"}</span>
+                          </div>
+                        </td>
+                        <td><span className="mono" style={{ color: "var(--text-3)", fontSize: "12px" }}>{call.from_number}</span></td>
+                        <td><span style={{ fontSize: "12px", color: "var(--text-2)" }}>{fmtDuration(call.duration_seconds)}</span></td>
+                        <td>
+                          {call.intent && (
+                            <span className="badge badge-blue" style={{ fontSize: "10px" }}>{call.intent.replace(/_/g, " ")}</span>
+                          )}
+                        </td>
+                        <td><span className={`badge ${badgeCls}`} style={{ fontSize: "10px" }}>{outcome}</span></td>
+                        <td><span style={{ fontSize: "11px", color: "var(--text-3)" }}>{fmtTime(call.started_at ?? call.created_at)}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Call detail panel */}
+          {selectedCall && (
+            <div className="card fade-in-up" style={{ padding: 18, opacity: 0, alignSelf: "start" }}>
+              <div className="flex-between" style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: "14px", fontWeight: 600, color: "var(--text)" }}>Call Details</p>
+                <button className="icon-btn" onClick={() => setSelectedCall(null)}>
+                  ×
+                </button>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[
+                  { label: "Caller",   value: selectedCall.customer_name ?? "Unknown" },
+                  { label: "Number",   value: selectedCall.from_number },
+                  { label: "Duration", value: fmtDuration(selectedCall.duration_seconds) },
+                  { label: "Intent",   value: selectedCall.intent?.replace(/_/g, " ") ?? "—" },
+                  { label: "Outcome",  value: selectedCall.outcome ?? "completed" },
+                  { label: "Time",     value: fmtTime(selectedCall.started_at ?? selectedCall.created_at) },
+                ].map((row) => (
+                  <div key={row.label} className="flex-between">
+                    <span style={{ fontSize: "12px", color: "var(--text-3)" }}>{row.label}</span>
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-2)" }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {selectedCall.summary && (
+                <div style={{ marginTop: 14 }}>
+                  <p style={{ fontSize: "12px", color: "var(--text-3)", marginBottom: 6 }}>AI Summary</p>
+                  <p style={{ fontSize: "12px", color: "var(--text-2)", lineHeight: 1.5, padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r)", border: "1px solid var(--border)" }}>
+                    {selectedCall.summary}
+                  </p>
+                </div>
+              )}
+
+              {selectedCall.transcript && (
+                <div style={{ marginTop: 14 }}>
+                  <p style={{ fontSize: "12px", color: "var(--text-3)", marginBottom: 6 }}>Transcript</p>
+                  <div style={{ maxHeight: 200, overflowY: "auto", fontSize: "11px", color: "var(--text-3)", lineHeight: 1.6, padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r)", border: "1px solid var(--border)" }}>
+                    {selectedCall.transcript}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Recent calls table */}
-      <div className="glass-card p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-white">Recent Calls</h2>
-          {recent.length === 0 && !loading && (
-            <span
-              className="text-xs"
-              style={{ color: "rgba(226,232,240,0.4)" }}
-            >
-              No calls yet
-            </span>
-          )}
-        </div>
-        {recent.length === 0 ? (
-          <div
-            className="py-10 text-center"
-            style={{ color: "rgba(226,232,240,0.3)" }}
-          >
-            <Clock size={24} className="mx-auto mb-3" style={{ opacity: 0.4 }} />
-            <p className="text-xs">
-              Completed calls will appear here. Start the backend and make a call.
-            </p>
-          </div>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ color: "rgba(226,232,240,0.4)" }}>
-                <th className="text-left py-2 pb-3">Customer</th>
-                <th className="text-left py-2 pb-3">Number</th>
-                <th className="text-left py-2 pb-3">Duration</th>
-                <th className="text-left py-2 pb-3">Outcome</th>
-                <th className="text-left py-2 pb-3">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recent.map((row) => {
-                const { label, ok } = outcomeFromStatus(row.status);
-                return (
-                  <tr
-                    key={row.call_id}
-                    style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}
-                  >
-                    <td className="py-2.5 text-white font-medium">
-                      {row.customer_name}
-                    </td>
-                    <td
-                      className="py-2.5 font-mono"
-                      style={{ color: "rgba(226,232,240,0.5)" }}
-                    >
-                      {row.from_number}
-                    </td>
-                    <td
-                      className="py-2.5 font-mono"
-                      style={{ color: "rgba(226,232,240,0.6)" }}
-                    >
-                      {fmtDuration(row.duration_seconds)}
-                    </td>
-                    <td className="py-2.5">
-                      <span className={`badge ${ok ? "badge-green" : "badge-red"}`}>
-                        {label}
-                      </span>
-                    </td>
-                    <td
-                      className="py-2.5 font-mono"
-                      style={{ color: "rgba(226,232,240,0.4)" }}
-                    >
-                      {fmtTime(row.created_at)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
