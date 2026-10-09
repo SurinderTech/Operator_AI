@@ -19,7 +19,7 @@ Operator AI connects your phone number and WhatsApp line to an intelligent agent
 
 ---
 
-## What Is Operator AI
+## What Is Operator AI?
 
 Businesses spend a huge amount of time on repetitive operational work:
 
