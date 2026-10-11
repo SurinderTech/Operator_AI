@@ -30,8 +30,12 @@ openai>=1.40.0
 langchain-text-splitters>=0.2.0
 pypdf>=4.2.0
 
-# Telephony / Voice
-twilio>=9.0.0
+# Telephony / Voice — Exotel (uses httpx for HTTP, no SDK needed)
+# twilio>=9.0.0  ← REMOVED: migrated to Exotel Voice + Meta WhatsApp Cloud API
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
 
 # CRM
 hubspot-api-client>=9.0.0

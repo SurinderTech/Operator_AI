@@ -140,14 +140,29 @@ export default function Settings() {
     finally { setSaving(false); }
   };
 
-  const maskedSid = "AC" + "•".repeat(32);
-  const maskedToken = "•".repeat(32);
-  const maskedHubspot = "pat-na-" + "•".repeat(28);
-  const maskedGemini = "AIzaSy" + "•".repeat(25);
-  const revealedSid = "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-  const revealedToken = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-  const revealedHubspot = "pat-na-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
-  const revealedGemini = "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+  const maskedMetaToken  = "EAAxxxxxxxxx" + "•".repeat(30);
+  const maskedMetaPhoneId = "•".repeat(15);
+  const maskedExotelKey  = "•".repeat(20);
+  const maskedHubspot    = "pat-na-" + "•".repeat(28);
+  const maskedGemini     = "AIzaSy" + "•".repeat(25);
+  const revealedMetaToken = "EAAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+  const revealedMetaPhoneId = "1234567890123456";
+  const revealedExotelKey = "xxxxxxxxxxxxxxxxxxxxxxxx";
+  const revealedHubspot  = "pat-na-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+  const revealedGemini   = "AIzaSyxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+
+  // Provider status from backend
+  const [providerStatus, setProviderStatus] = useState<{
+    whatsapp?: { configured: boolean; missing_keys?: string[]; phone_number_id?: string };
+    voice?: { configured: boolean; missing_keys?: string[]; caller_id?: string; stream_enabled?: boolean };
+  }>({});
+
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/webhooks/status`)
+      .then((r) => r.json())
+      .then((d) => setProviderStatus(d))
+      .catch(() => {});
+  }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -367,19 +382,84 @@ export default function Settings() {
                   {showSecrets ? "Hide" : "Reveal"} secrets
                 </button>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+
+              {/* Meta WhatsApp section */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: "16px" }}>💬</span>
+                  <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Meta WhatsApp Cloud API</p>
+                  {providerStatus.whatsapp && (
+                    <span className={`badge ${providerStatus.whatsapp.configured ? "badge-green" : "badge-red"}`} style={{ fontSize: "10px" }}>
+                      {providerStatus.whatsapp.configured ? "Configured" : "Not Configured"}
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {[
+                    { id: "settings-meta-token",    label: "Access Token",      value: showSecrets ? revealedMetaToken  : maskedMetaToken },
+                    { id: "settings-meta-phone-id", label: "Phone Number ID",   value: showSecrets ? revealedMetaPhoneId : maskedMetaPhoneId },
+                  ].map((f) => (
+                    <div key={f.id} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      <label style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-3)" }}>{f.label}</label>
+                      <input id={f.id} className="input" value={f.value} readOnly
+                        style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--surface-2)", color: "var(--text-3)" }} />
+                    </div>
+                  ))}
+                </div>
+                {providerStatus.whatsapp?.missing_keys && providerStatus.whatsapp.missing_keys.length > 0 && (
+                  <p style={{ fontSize: "11px", color: "var(--amber)", marginTop: 8 }}>
+                    ⚠ Missing in .env: {providerStatus.whatsapp.missing_keys.join(", ")}
+                  </p>
+                )}
+              </div>
+
+              {/* Exotel Voice section */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: "16px" }}>📞</span>
+                  <p style={{ fontSize: "12px", fontWeight: 600, color: "var(--text)" }}>Exotel Voice</p>
+                  {providerStatus.voice && (
+                    <span className={`badge ${providerStatus.voice.configured ? "badge-green" : "badge-red"}`} style={{ fontSize: "10px" }}>
+                      {providerStatus.voice.configured ? "Configured" : "Not Configured"}
+                    </span>
+                  )}
+                  {providerStatus.voice?.stream_enabled && (
+                    <span className="badge badge-blue" style={{ fontSize: "10px" }}>AgentStream ✓</span>
+                  )}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {[
+                    { id: "settings-exotel-key",  label: "API Key",    value: showSecrets ? revealedExotelKey : maskedExotelKey },
+                    { id: "settings-exotel-token", label: "API Token",  value: showSecrets ? revealedExotelKey : maskedExotelKey },
+                  ].map((f) => (
+                    <div key={f.id} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      <label style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-3)" }}>{f.label}</label>
+                      <input id={f.id} className="input" value={f.value} readOnly
+                        style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--surface-2)", color: "var(--text-3)" }} />
+                    </div>
+                  ))}
+                </div>
+                {providerStatus.voice?.missing_keys && providerStatus.voice.missing_keys.length > 0 && (
+                  <p style={{ fontSize: "11px", color: "var(--amber)", marginTop: 8 }}>
+                    ⚠ Missing in .env: {providerStatus.voice.missing_keys.join(", ")}
+                  </p>
+                )}
+              </div>
+
+              {/* Other API keys */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
                 {[
-                  { id: "settings-twilio-sid",    label: "Twilio Account SID",    value: showSecrets ? revealedSid     : maskedSid },
-                  { id: "settings-twilio-token",  label: "Twilio Auth Token",      value: showSecrets ? revealedToken   : maskedToken },
-                  { id: "settings-hubspot-key",   label: "HubSpot Private App Key",value: showSecrets ? revealedHubspot : maskedHubspot },
-                  { id: "settings-gemini-key",    label: "Gemini API Key",         value: showSecrets ? revealedGemini  : maskedGemini },
+                  { id: "settings-hubspot-key", label: "HubSpot Private App Key", value: showSecrets ? revealedHubspot : maskedHubspot },
+                  { id: "settings-gemini-key",  label: "Gemini API Key",          value: showSecrets ? revealedGemini  : maskedGemini },
                 ].map((field) => (
-                  <Field key={field.id} label={field.label}>
+                  <div key={field.id} style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    <label style={{ fontSize: "12px", fontWeight: 500, color: "var(--text-3)" }}>{field.label}</label>
                     <input id={field.id} className="input" value={field.value} readOnly
                       style={{ fontFamily: "monospace", fontSize: "12px", background: "var(--surface-2)", color: "var(--text-3)" }} />
-                  </Field>
+                  </div>
                 ))}
               </div>
+
               <div style={{ padding: "12px 14px", background: "var(--red-dim)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: "var(--r)" }}>
                 <p style={{ fontSize: "12px", color: "var(--red)", lineHeight: 1.5 }}>
                   Secrets are stored in your <code style={{ fontFamily: "monospace" }}>.env</code> file and never exposed in API responses. Edit them directly in <code style={{ fontFamily: "monospace" }}>backend/.env</code>.

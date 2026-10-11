@@ -10,12 +10,17 @@ from app.models.customer import Customer, Lead
 
 
 def _get_whatsapp():
-    """Return real or mock WhatsApp client."""
-    use_mock = not (settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN and settings.TWILIO_WHATSAPP_NUMBER)
-    from app.integrations.whatsapp.twilio_whatsapp import get_whatsapp
-    if use_mock:
-        logger.info("[WhatsApp] No credentials — using MockWhatsApp")
-    return get_whatsapp(use_mock=use_mock)
+    """Return real Meta WhatsApp client or mock, based on configuration."""
+    from app.integrations.whatsapp import get_whatsapp_client
+    # Force mock if WhatsApp is disabled or credentials are absent
+    force_mock = (
+        not settings.WHATSAPP_ENABLED
+        or not settings.META_WHATSAPP_ACCESS_TOKEN
+        or not settings.META_WHATSAPP_PHONE_NUMBER_ID
+    )
+    if force_mock:
+        logger.info("[WhatsApp] No Meta credentials — using MockWhatsAppClient")
+    return get_whatsapp_client(force_mock=force_mock)
 
 
 async def send_inquiry_whatsapp(

@@ -37,8 +37,10 @@ class Agent(Base, UUIDMixin, TimestampMixin):
         PgEnum(AgentStatus, name="agent_status"), default=AgentStatus.DRAFT
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    # Assigned phone number (Twilio)
+    # Voice channel — Exotel ExoPhone / inbound DID number
     phone_number: Mapped[str | None] = mapped_column(String(30))
+    # WhatsApp channel — Meta Phone Number ID (from Meta Developer Console)
+    whatsapp_phone_number_id: Mapped[str | None] = mapped_column(String(50), index=True)
 
     # Relationships
     business: Mapped["Business"] = relationship(back_populates="agents")  # noqa

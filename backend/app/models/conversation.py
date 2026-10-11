@@ -85,6 +85,9 @@ class Message(Base, UUIDMixin, TimestampMixin):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     audio_url: Mapped[str | None] = mapped_column(String(500))
+    # Provider message ID for deduplication (e.g. Meta wamid, Exotel Sid)
+    provider_message_id: Mapped[str | None] = mapped_column(String(200), index=True)
+    channel: Mapped[str | None] = mapped_column(String(50))  # whatsapp / phone / web / email
     extra_data: Mapped[dict] = mapped_column(JSON, default=dict)
 
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
@@ -101,8 +104,11 @@ class Call(Base, UUIDMixin, TimestampMixin):
     conversation_id: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(), ForeignKey("conversations.id", ondelete="SET NULL")
     )
-    # Twilio fields
+    # Provider-neutral call SID (Exotel uses this column)
+    provider_call_sid: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
+    # Legacy Twilio column — kept for existing rows; new code writes provider_call_sid
     twilio_call_sid: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
+    provider: Mapped[str] = mapped_column(String(50), default="exotel")  # exotel / mock
     from_number: Mapped[str] = mapped_column(String(30))
     to_number: Mapped[str] = mapped_column(String(30))
     direction: Mapped[str] = mapped_column(String(20), default="inbound")  # inbound / outbound

@@ -788,7 +788,7 @@ async def human_handoff_node(state: AgentState) -> AgentState:
         except Exception:
             pass
     if not team_phone:
-        team_phone = (settings.TEAM_WHATSAPP_PHONE or settings.TWILIO_WHATSAPP_NUMBER).strip()
+        team_phone = (settings.TEAM_WHATSAPP_PHONE or "").strip()
 
     if customer and team_phone:
         try:

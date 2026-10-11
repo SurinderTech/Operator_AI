@@ -23,11 +23,11 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan -- startup and shutdown."""
-    import os
-    import json
+    """Application lifespan — startup and shutdown."""
+    import os, json
     from app.core.logging import logger
     from app.core.redis import get_redis, close_redis
+
     print(f"\n{'='*60}")
     print(f"  [START] {settings.APP_NAME} v{settings.APP_VERSION}")
     print(f"  [API]   http://localhost:8000")
@@ -36,19 +36,41 @@ async def lifespan(app: FastAPI):
     print(f"  [CORS]  {settings.CORS_ORIGINS}")
     print(f"{'='*60}\n")
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+
     await init_db()
     await get_redis()   # warm-up Redis (logs warning if down, does NOT crash)
 
-    # ── Google Calendar config diagnostics (safe — no secrets logged) ──
-    # NOTE: pydantic-settings populates the Settings object from .env.
-    # We read from settings first, with os.environ fallback.
+    # ── Meta WhatsApp Cloud API diagnostics ───────────────────────────────────
+    wa_missing = settings.validate_whatsapp_config()
+    if not settings.WHATSAPP_ENABLED:
+        print("  [WA]    WhatsApp disabled (WHATSAPP_ENABLED=false)")
+    elif wa_missing:
+        print(f"  [WA]    ⚠  WhatsApp not fully configured — missing: {', '.join(wa_missing)}")
+        print(f"  [WA]    Falling back to MockWhatsAppClient (no real messages sent)")
+    else:
+        print(f"  [WA]    ✅ Meta WhatsApp Cloud API configured")
+        print(f"  [WA]    Phone Number ID: {settings.META_WHATSAPP_PHONE_NUMBER_ID}")
+        print(f"  [WA]    Graph API: {settings.META_GRAPH_API_VERSION}")
+        print(f"  [WA]    Webhook: {settings.effective_webhook_base_url}/api/v1/webhooks/whatsapp")
+
+    # ── Exotel Voice diagnostics ──────────────────────────────────────────────
+    ex_missing = settings.validate_exotel_config()
+    if not settings.EXOTEL_VOICE_ENABLED:
+        print("  [VOICE] Voice disabled (EXOTEL_VOICE_ENABLED=false)")
+    elif ex_missing:
+        print(f"  [VOICE] ⚠  Exotel not fully configured — missing: {', '.join(ex_missing)}")
+        print(f"  [VOICE] Falling back to MockVoiceClient (no real calls placed)")
+    else:
+        print(f"  [VOICE] ✅ Exotel Voice configured")
+        print(f"  [VOICE] Caller ID: {settings.EXOTEL_CALLER_ID or '(not set)'}")
+        print(f"  [VOICE] AgentStream: {'✅ ' + settings.EXOTEL_STREAM_URL if settings.EXOTEL_STREAM_URL else '— not configured'}")
+        print(f"  [VOICE] Inbound URL: {settings.effective_webhook_base_url}/api/v1/webhooks/exotel/inbound")
+
+    # ── Google Calendar diagnostics ───────────────────────────────────────────
     _gcal_creds_raw = settings.GOOGLE_CALENDAR_CREDENTIALS_JSON.strip() \
                       or os.environ.get("GOOGLE_CALENDAR_CREDENTIALS_JSON", "").strip()
     _gcal_token_raw = settings.GOOGLE_CALENDAR_TOKEN_JSON.strip() \
                       or os.environ.get("GOOGLE_CALENDAR_TOKEN_JSON", "").strip()
-    _gcal_redirect  = settings.GOOGLE_CALENDAR_REDIRECT_URI.strip() \
-                      or os.environ.get("GOOGLE_CALENDAR_REDIRECT_URI", "") \
-                      or "http://localhost:8000/api/v1/auth/google/callback"
 
     _creds_valid = False
     if _gcal_creds_raw:
@@ -67,22 +89,20 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
 
-    print(f"  [GCAL]  GOOGLE_CALENDAR_CREDENTIALS_JSON configured: {_creds_valid}")
-    print(f"  [GCAL]  GOOGLE_CALENDAR_TOKEN_JSON configured:        {_token_valid}")
-    print(f"  [GCAL]  Redirect URI: {_gcal_redirect}")
-    if not _creds_valid:
-        print(f"  [GCAL]  WARNING: Credentials not loaded — check GOOGLE_CALENDAR_CREDENTIALS_JSON in .env")
-    if _creds_valid and not _token_valid:
-        print(f"  [GCAL]  INFO: Token not set — open http://localhost:8000/api/v1/auth/google/calendar to authorize")
+    print(f"  [GCAL]  Credentials configured: {_creds_valid}")
+    print(f"  [GCAL]  Token configured:        {_token_valid}")
     if _creds_valid and _token_valid:
-        print(f"  [GCAL]  OK: Google Calendar fully configured — real calendar will be used")
+        print("  [GCAL]  ✅ Google Calendar fully configured")
+    elif _creds_valid:
+        print("  [GCAL]  INFO: Open /api/v1/auth/google/calendar to authorise")
+    else:
+        print("  [GCAL]  WARNING: GOOGLE_CALENDAR_CREDENTIALS_JSON not set")
     print()
 
-
-    print("[OK] Backend ready -- waiting for requests...\n")
+    print("[OK] Backend ready — waiting for requests...\n")
     yield
     await close_redis()
-    logger.info("Shutting down AI Business Employee")
+    logger.info("Shutting down Operator AI")
     print("\n[STOP] Backend shutdown complete.\n")
 
 

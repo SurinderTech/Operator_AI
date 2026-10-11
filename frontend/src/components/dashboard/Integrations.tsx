@@ -53,17 +53,18 @@ const statusInfo: Record<string, { label: string; cls: string }> = {
 };
 
 const integrationColor: Record<string, string> = {
-  twilio:          "var(--red)",
+  whatsapp:        "var(--green)",
+  exotel:          "var(--blue)",
   gemini:          "var(--purple)",
   hubspot:         "var(--amber)",
   google_calendar: "var(--blue)",
-  whatsapp:        "var(--green)",
   pgvector:        "var(--cyan)",
   redis:           "var(--amber)",
 };
 
 const setupLinks: Record<string, string> = {
-  twilio:          "https://console.twilio.com/",
+  whatsapp:        "https://developers.facebook.com/docs/whatsapp/cloud-api/",
+  exotel:          "https://my.exotel.com/",
   hubspot:         "https://app.hubspot.com/",
   google_calendar: "https://console.cloud.google.com/",
   gemini:          "https://aistudio.google.com/apikey",
@@ -317,7 +318,7 @@ export default function Integrations() {
           </p>
         </div>
         <p style={{ fontSize: "11px", color: "var(--text-3)", lineHeight: 1.7, fontFamily: "monospace" }}>
-          Customer → Twilio Voice → FastAPI Webhook → LangGraph Orchestrator
+          Customer → Exotel Voice / Meta WhatsApp → FastAPI Webhook → LangGraph Orchestrator
           → [CRM · Calendar · WhatsApp · RAG] → Response
         </p>
       </div>

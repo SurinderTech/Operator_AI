@@ -1,7 +1,7 @@
 """Integrations API — list and status of connected services."""
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database.session import get_db
@@ -23,21 +23,59 @@ async def _first_business_id(db: AsyncSession) -> uuid.UUID | None:
 def _integration_status_from_env() -> list[dict]:
     """
     Generate integration status from environment config.
-    This gives the dashboard a real view of what's configured
-    even before the Integration DB rows are created.
+    Gives the dashboard a real view of what's configured
+    even before Integration DB rows are created.
     """
+    wa_missing = settings.validate_whatsapp_config()
+    ex_missing = settings.validate_exotel_config()
+
     return [
         {
-            "id": "env-twilio",
-            "integration_type": "twilio",
-            "display_name": "Twilio (Voice + WhatsApp)",
-            "status": "connected" if settings.TWILIO_ACCOUNT_SID else "disconnected",
-            "icon": "📞",
-            "description": "Handles inbound/outbound voice calls and WhatsApp messages",
-            "config_keys": ["TWILIO_ACCOUNT_SID", "TWILIO_PHONE_NUMBER", "TWILIO_WHATSAPP_NUMBER"],
-            "configured": bool(settings.TWILIO_ACCOUNT_SID),
+            "id": "env-meta-whatsapp",
+            "integration_type": "whatsapp",
+            "display_name": "Meta WhatsApp Cloud API",
+            "status": "connected" if not wa_missing else "disconnected",
+            "icon": "💬",
+            "description": (
+                "Official Meta WhatsApp Cloud API — inbound customer messages, "
+                "AI replies, and approved template messages"
+            ),
+            "config_keys": [
+                "META_WHATSAPP_ACCESS_TOKEN",
+                "META_WHATSAPP_PHONE_NUMBER_ID",
+                "META_APP_SECRET",
+                "META_WHATSAPP_VERIFY_TOKEN",
+            ],
+            "configured": not wa_missing,
             "last_synced_at": None,
-            "error_message": None if settings.TWILIO_ACCOUNT_SID else "TWILIO_ACCOUNT_SID not set",
+            "error_message": (
+                None if not wa_missing
+                else f"Missing: {', '.join(wa_missing)}"
+            ),
+        },
+        {
+            "id": "env-exotel-voice",
+            "integration_type": "exotel",
+            "display_name": "Exotel Voice (India)",
+            "status": "connected" if not ex_missing else "disconnected",
+            "icon": "📞",
+            "description": (
+                "Exotel telephony for India — inbound AI voice calls, "
+                "outbound dialling, and AgentStream bidirectional audio"
+            ),
+            "config_keys": [
+                "EXOTEL_ACCOUNT_SID",
+                "EXOTEL_API_KEY",
+                "EXOTEL_API_TOKEN",
+                "EXOTEL_API_BASE_URL",
+                "EXOTEL_CALLER_ID",
+            ],
+            "configured": not ex_missing,
+            "last_synced_at": None,
+            "error_message": (
+                None if not ex_missing
+                else f"Missing: {', '.join(ex_missing)}"
+            ),
         },
         {
             "id": "env-gemini",
@@ -73,19 +111,10 @@ def _integration_status_from_env() -> list[dict]:
             "config_keys": ["GOOGLE_CALENDAR_CREDENTIALS_JSON", "GOOGLE_CALENDAR_ID"],
             "configured": bool(settings.GOOGLE_CALENDAR_CREDENTIALS_JSON),
             "last_synced_at": None,
-            "error_message": None if settings.GOOGLE_CALENDAR_CREDENTIALS_JSON else "Calendar credentials not configured",
-        },
-        {
-            "id": "env-whatsapp",
-            "integration_type": "whatsapp",
-            "display_name": "WhatsApp Business",
-            "status": "connected" if settings.TWILIO_WHATSAPP_NUMBER else "disconnected",
-            "icon": "💬",
-            "description": "Send property details, appointment confirmations, and follow-ups",
-            "config_keys": ["TWILIO_WHATSAPP_NUMBER"],
-            "configured": bool(settings.TWILIO_WHATSAPP_NUMBER),
-            "last_synced_at": None,
-            "error_message": None if settings.TWILIO_WHATSAPP_NUMBER else "WhatsApp number not configured",
+            "error_message": (
+                None if settings.GOOGLE_CALENDAR_CREDENTIALS_JSON
+                else "Calendar credentials not configured"
+            ),
         },
     ]
 
@@ -103,16 +132,37 @@ async def public_list_integrations(db: AsyncSession = Depends(get_db)):
 
 @router.get("/public/env-status")
 async def public_env_status():
-    """Return which env vars are set (no values, just booleans)."""
+    """Return which env vars are set (boolean presence only — no values)."""
     return {
-        "GOOGLE_API_KEY":                    bool(settings.GOOGLE_API_KEY),
-        "TWILIO_ACCOUNT_SID":                bool(settings.TWILIO_ACCOUNT_SID),
-        "TWILIO_PHONE_NUMBER":               bool(settings.TWILIO_PHONE_NUMBER),
-        "TWILIO_WHATSAPP_NUMBER":            bool(settings.TWILIO_WHATSAPP_NUMBER),
-        "HUBSPOT_ACCESS_TOKEN":              bool(settings.HUBSPOT_ACCESS_TOKEN),
-        "GOOGLE_CALENDAR_CREDENTIALS_JSON":  bool(settings.GOOGLE_CALENDAR_CREDENTIALS_JSON),
-        "ESCALATION_PHONE":                  bool(settings.ESCALATION_PHONE),
-        "TEAM_WHATSAPP_PHONE":               bool(settings.TEAM_WHATSAPP_PHONE),
+        "GOOGLE_API_KEY":                       bool(settings.GOOGLE_API_KEY),
+        "META_WHATSAPP_ACCESS_TOKEN":           bool(settings.META_WHATSAPP_ACCESS_TOKEN),
+        "META_WHATSAPP_PHONE_NUMBER_ID":        bool(settings.META_WHATSAPP_PHONE_NUMBER_ID),
+        "META_APP_SECRET":                      bool(settings.META_APP_SECRET),
+        "META_WHATSAPP_VERIFY_TOKEN":           bool(settings.META_WHATSAPP_VERIFY_TOKEN),
+        "EXOTEL_ACCOUNT_SID":                   bool(settings.EXOTEL_ACCOUNT_SID),
+        "EXOTEL_API_KEY":                       bool(settings.EXOTEL_API_KEY),
+        "EXOTEL_API_TOKEN":                     bool(settings.EXOTEL_API_TOKEN),
+        "EXOTEL_API_BASE_URL":                  bool(settings.EXOTEL_API_BASE_URL),
+        "EXOTEL_CALLER_ID":                     bool(settings.EXOTEL_CALLER_ID),
+        "EXOTEL_STREAM_URL":                    bool(settings.EXOTEL_STREAM_URL),
+        "HUBSPOT_ACCESS_TOKEN":                 bool(settings.HUBSPOT_ACCESS_TOKEN),
+        "GOOGLE_CALENDAR_CREDENTIALS_JSON":     bool(settings.GOOGLE_CALENDAR_CREDENTIALS_JSON),
+        "ESCALATION_PHONE":                     bool(settings.ESCALATION_PHONE),
+        "TEAM_WHATSAPP_PHONE":                  bool(settings.TEAM_WHATSAPP_PHONE),
+    }
+
+
+@router.get("/public/webhook-urls")
+async def public_webhook_urls():
+    """Return the configured webhook URLs for Meta and Exotel setup."""
+    base = settings.effective_webhook_base_url
+    return {
+        "whatsapp_webhook_url": f"{base}/api/v1/webhooks/whatsapp",
+        "whatsapp_verify_token_hint": "Set META_WHATSAPP_VERIFY_TOKEN to your chosen token",
+        "exotel_inbound_url": f"{base}/api/v1/webhooks/exotel/inbound",
+        "exotel_status_callback_url": f"{base}/api/v1/webhooks/exotel/status",
+        "exotel_stream_url": settings.EXOTEL_STREAM_URL or "(not configured)",
+        "provider_status_url": f"{base}/api/v1/webhooks/status",
     }
 
 

@@ -10,7 +10,9 @@ from app.models.base import UUIDMixin, TimestampMixin
 
 
 class IntegrationType(str, enum.Enum):
-    TWILIO = "twilio"
+    TWILIO = "twilio"              # Legacy — kept for historical DB rows
+    META_WHATSAPP = "whatsapp"     # Meta WhatsApp Cloud API
+    EXOTEL = "exotel"              # Exotel Voice India
     HUBSPOT = "hubspot"
     GOOGLE_CALENDAR = "google_calendar"
     WHATSAPP = "whatsapp"
