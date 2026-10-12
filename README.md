@@ -1,3 +1,5 @@
+![Operator AI demo](assets/c4cbe309-153b-4ce8-93d3-24ffc90bdef6.gif)
+
 # Operator AI — Setup & Developer Guide
 
 ## Architecture Overview
