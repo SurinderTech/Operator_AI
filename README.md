@@ -306,7 +306,7 @@ python app/database/migrations/0002_meta_exotel_provider_columns.py --downgrade
 
 ----
 
-## Architecture Decisions
+## Architecture Decision
 
 - **No Twilio SDK** — removed from `requirements.txt`. All telephony via Exotel REST API over `httpx`.
 - **Provider adapters** — `WhatsAppClientBase` / `VoiceClientBase` interfaces let you swap providers without changing orchestrator code.
