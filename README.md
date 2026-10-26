@@ -290,7 +290,7 @@ python app/database/migrations/0002_meta_exotel_provider_columns.py --downgrade
 - [ ] Set `DEBUG=false` in production
 - [ ] Set `APP_ENV=production` — enables strict signature validation
 
----
+--
 
 ## Common Errors
 
