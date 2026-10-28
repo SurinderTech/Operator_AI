@@ -206,15 +206,7 @@ META_WHATSAPP_VERIFY_TOKEN=          # Your chosen webhook verify token
 META_APP_SECRET=                     # App Secret for signature verification
 WHATSAPP_ENABLED=true
 
-# ── Exotel Voice ──────────────────────────────────────────────────────────
-EXOTEL_ACCOUNT_SID=                  # Account SID
-EXOTEL_API_KEY=                      # API Key (Basic Auth username)
-EXOTEL_API_TOKEN=                    # API Token (Basic Auth password)
-EXOTEL_API_BASE_URL=                 # https://api.exotel.com/v1/Accounts/{SID}
-EXOTEL_CALLER_ID=                    # Your ExoPhone number
-EXOTEL_STREAM_URL=                   # wss:// for AgentStream (optional)
-EXOTEL_APP_OR_FLOW_URL=              # Exotel App URL for inbound routing
-EXOTEL_VOICE_ENABLED=true
+#Exotel were
 
 # ── Public URLs ───────────────────────────────────────────────────────────
 PUBLIC_BASE_URL=http://localhost:8000
