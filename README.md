@@ -2,6 +2,10 @@
 
 <img src="assets/banner.jpg" alt="Operator AI Banner" width="100%" />
 
+<br /><br />
+
+<img src="assets/ai-employee.gif" alt="Operator AI in action" width="100%" />
+
 </div>
 
 # Operator AI
