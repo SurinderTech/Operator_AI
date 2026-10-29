@@ -1,216 +1,453 @@
-![Operator AI demo](assets/c4cbe309-153b-4ce8-93d3-24ffc90bdef6.gif)
+<div align="center">
 
-# Operator AI — Setup & Developer Guide
+<img src="assets/banner.jpg" alt="Operator AI Banner" width="100%" />
 
-## Architecture Overview
+</div>
 
-```
-Customer (WhatsApp) ──► Meta Cloud API ──► POST /webhooks/whatsapp
-Customer (Phone)     ──► Exotel Voice  ──► POST /webhooks/exotel/inbound
-                                               │
-                                     LangGraph Orchestrator
-                                               │
-                             ┌─────────────────┼──────────────────┐
-                         Lead Agent    Booking Agent     Support Agent
-                                               │
-                         ┌─────────────────────┼──────────────────┐
-                       CRM           Google Calendar          RAG / KB
-                    (HubSpot)                              (pgvector)
-                                               │
-                                  Reply sent via same channel:
-                           WhatsApp → Meta Cloud API send
-                           Voice → ExoML / Exotel AgentStream
-```
+# Operator AI
 
-**No Twilio dependency.** The application starts without any Twilio credentials.
+**The AI workforce that runs your business communications 24/7 -- across WhatsApp, Voice and Web.**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Orchestrator-orange)](https://langchain-ai.github.io/langgraph/)
+[![Gemini](https://img.shields.io/badge/Gemini-AI-4285F4?logo=google)](https://aistudio.google.com)
+[![pgvector](https://img.shields.io/badge/pgvector-RAG-336791?logo=postgresql)](https://github.com/pgvector/pgvector)
 
 ---
 
-## Required Accounts
+## The Problem
 
-| Service | Purpose | Signup |
-|---|---|---|
-| Meta Developer App | WhatsApp Cloud API | https://developers.facebook.com/ |
-| Exotel | India voice telephony | https://my.exotel.com/ |
-| Google AI Studio | Gemini LLM | https://aistudio.google.com/ |
-| HubSpot (optional) | CRM sync | https://app.hubspot.com/ |
-| Google Cloud (optional) | Calendar booking | https://console.cloud.google.com/ |
+Every growing business faces the same brutal reality:
+
+> **Your best leads message at 2 AM. Your team responds at 10 AM. The deal is gone.**
+
+- 68% of customers switch to a competitor if they do not get a timely response
+- Small businesses miss 40%+ of inbound calls during business hours
+- Hiring a 24/7 support team costs 8 to 20 lakh per year per person
+- Your team wastes hours on repetitive questions, manual bookings and follow-ups
+- Leads slip through the cracks because no one tracks every conversation
+
+**Operator AI solves all of this -- instantly.**
 
 ---
 
-## Quick Start (Local Development)
+## What is Operator AI?
 
-### 1. Clone and set up environment
+Operator AI is a **multi-channel AI operator platform** that deploys intelligent agents on behalf of your business.
+
+These agents:
+
+- Answer every WhatsApp message and phone call in seconds, 24/7
+- Qualify leads automatically and score them (hot / warm / cold)
+- Book appointments directly into your Google Calendar
+- Sync to your CRM (HubSpot) in real time
+- Remember every customer across conversations, channels and time
+- Escalate to a human only when genuinely needed
+
+Think of it as hiring a team of AI employees -- a Receptionist, a Lead Agent, a Booking Agent and a Support Agent -- who never sleep, never get sick and never miss a message.
+
+---
+
+## System Architecture
+
+```
+                   +-------------------------------------------------------+
+                   |                 OPERATOR AI PLATFORM                  |
+                   |                                                       |
+ Customer          |  +---------------------------------------------------+|
+ (WhatsApp) ------>|  |         FastAPI Webhook Gateway                   ||
+                   |  |  POST /api/v1/webhooks/whatsapp                   ||
+ Customer          |  |  POST /api/v1/webhooks/tone                       ||
+ (Phone) --------->|  +--------------------+---------------------------------+|
+                   |                       |                               |
+ Customer          |  +--------------------v------------------------------+|
+ (Web) ----------->|  |        LangGraph AI Orchestrator                 ||
+                   |  |         (Router + Memory + State)                ||
+                   |  +-------+----------+------------+------------------+|
+                   |          |          |            |                   |
+                   |  +-------v-+ +------v--+  +------v------+           |
+                   |  |  Lead   | |Booking  |  |  Support    |           |
+                   |  |  Agent  | |  Agent  |  |    Agent    |           |
+                   |  +-------+-+ +------+--+  +------+------+           |
+                   |          +----------+-----------+                    |
+                   |  +----------------------------------------------+   |
+                   |  |                  Tool Layer                  |   |
+                   |  |  HubSpot CRM  Google Calendar  pgvector RAG |   |
+                   |  |  Tone Voice API  Meta WhatsApp Cloud API    |   |
+                   |  +----------------------------------------------+   |
+                   +-------------------------------------------------------+
+                                          |
+                          +--------------v-----------------+
+                          |   Reply sent via same channel  |
+                          |  WhatsApp -> Meta Cloud API    |
+                          |  Voice    -> Tone Voice API    |
+                          +--------------------------------+
+```
+
+### Agent Roles
+
+| Agent | Responsibility |
+|---|---|
+| Receptionist | First contact, intent detection, channel routing |
+| Lead Agent | Qualification, scoring hot/warm/cold, CRM sync |
+| Booking Agent | Appointment scheduling via Google Calendar |
+| Support Agent | FAQs, knowledge base RAG, escalation to human |
+
+---
+
+## User Journey -- From Sign-Up to AI Operator Live
+
+```mermaid
+journey
+    title Business Owner: Operator AI Onboarding
+    section Sign Up
+      Visit app and create account: 5: Owner
+      Set up business profile: 5: Owner
+      Configure AI Operator persona: 4: Owner
+    section Connect Channels
+      Connect WhatsApp via Meta Cloud API: 4: Owner
+      Connect Voice via Tone API: 4: Owner
+      Add team members: 3: Owner
+    section Train the AI
+      Upload knowledge base documents: 5: Owner
+      Set FAQ answers: 5: Owner
+      Configure escalation rules: 4: Owner
+    section Go Live
+      First customer message arrives: 5: Customer
+      AI responds instantly 24 hours a day: 5: Operator AI
+      Lead qualified and CRM synced: 5: Operator AI
+      Appointment booked automatically: 5: Operator AI
+    section Monitor and Grow
+      View analytics dashboard: 5: Owner
+      Review conversation logs: 4: Owner
+      Refine AI knowledge base: 4: Owner
+```
+
+---
+
+## End-to-End Customer Interaction Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Customer
+    participant W as WhatsApp or Phone
+    participant G as Webhook Gateway
+    participant O as AI Orchestrator
+    participant L as Lead Agent
+    participant B as Booking Agent
+    participant CRM as HubSpot CRM
+    participant CAL as Google Calendar
+
+    C->>W: Hi, I am looking for a 2BHK flat
+    W->>G: Webhook event POST /webhooks/whatsapp
+    G->>O: Route message to Orchestrator
+    O->>O: Detect intent - Lead Inquiry
+    O->>L: Handoff to Lead Agent
+    L->>C: Great! What is your budget range?
+    C->>L: 50 to 70 lakhs, need it by March
+    L->>CRM: Create Lead with score HOT
+    L->>C: Perfect match found! Want to schedule a site visit?
+    C->>B: Yes, Saturday 11am works
+    B->>CAL: Book appointment and confirm slot
+    CAL-->>B: Confirmed
+    B->>C: Confirmed! Saturday 11am. You will get a reminder.
+    B->>CRM: Update Lead status to Appointment Set
+```
+
+---
+
+## Business Owner Dashboard
+
+Once signed up and connected, the Operator AI Dashboard gives you full visibility:
+
+```
++--------------------------------------------------------------+
+|  OPERATOR AI DASHBOARD                       All Systems OK  |
++--------------+--------------+--------------+-----------------+
+|  Overview    |  Operators   |  Inbox       |  Calls          |
+|  Leads       |  Customers   |  Calendar    |  Knowledge      |
+|  Analytics   |  Reports     |  Integrations|  Settings       |
++--------------+--------------+--------------+-----------------+
+```
+
+| Section | What You See |
+|---|---|
+| Overview | Real-time KPIs -- calls, messages, leads, conversions |
+| Operators | Your AI agents and their current status |
+| Inbox | Every customer conversation, AI-handled and human-escalated |
+| Calls | Live and recorded call log with AI summaries |
+| Leads | Pipeline with scores -- Hot, Warm, Cold |
+| Calendar | All AI-booked appointments |
+| Knowledge | Documents your AI uses to answer questions |
+| Analytics | Response time, conversion rate, agent performance |
+| Integrations | WhatsApp, Tone Voice, HubSpot, Google Calendar, pgvector |
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 20+
+- PostgreSQL 15+ with pgvector extension
+- Redis
+
+### 1. Clone the repository
 
 ```bash
-git clone <repo>
-cd Ai_Employe
+git clone https://github.com/SurinderTech/Operator_AI.git
+cd Operator_AI
+```
 
-# Backend
+### 2. Set up the backend
+
+```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate          # Windows
-pip install -r requirements.txt
 
-# Frontend
-cd ../frontend
+# Windows
+.venv\Scripts\activate
+
+# macOS / Linux
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+### 3. Configure environment
+
+```bash
+cp .env.example backend/.env
+# Open backend/.env and fill in your credentials
+```
+
+### 4. Set up the frontend
+
+```bash
+cd frontend
 npm install
 ```
 
-### 2. Configure environment
+### 5. Start both services
 
 ```bash
-# Copy the template
-cp .env.example backend/.env
-# Edit backend/.env with your credentials
-```
-
-### 3. Start services
-
-```bash
-# Terminal 1 — Backend
+# Terminal 1 -- Backend (FastAPI)
 cd backend
 .venv\Scripts\activate
 py -m uvicorn main:app --reload
 
-# Terminal 2 — Frontend
+# Terminal 2 -- Frontend (Next.js)
 cd frontend
 npm run dev
 ```
 
-Backend: http://localhost:8000  
-Frontend: http://localhost:3000  
-API docs: http://localhost:8000/docs
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| API Docs (Swagger) | http://localhost:8000/docs |
+
+### Or use Docker
+
+```bash
+docker compose up --build
+```
 
 ---
 
-## Meta WhatsApp Cloud API Setup
+## Integration Setup
 
-### Step 1 — Create Meta Developer App
+### Meta WhatsApp Cloud API
+
+Lets customers message your business on WhatsApp -- AI replies instantly.
+
+#### Step 1 -- Create a Meta Developer App
 
 1. Go to https://developers.facebook.com/
-2. Click **My Apps → Create App**
-3. Choose **Business** type
-4. Add the **WhatsApp** product to your app
-5. Link your **WhatsApp Business Account**
+2. My Apps -> Create App -> Business
+3. Add the WhatsApp product
+4. Link your WhatsApp Business Account
 
-### Step 2 — Get credentials
+#### Step 2 -- Collect credentials
 
-From **WhatsApp → API Setup**:
-- **Phone Number ID** → `META_WHATSAPP_PHONE_NUMBER_ID`
-- **WhatsApp Business Account ID** → `META_WHATSAPP_BUSINESS_ACCOUNT_ID`
-- Generate a **System User** permanent token → `META_WHATSAPP_ACCESS_TOKEN`
-- From **App Settings → Basic**: copy **App Secret** → `META_APP_SECRET`
+From WhatsApp -> API Setup:
 
-### Step 3 — Set up webhook (requires public HTTPS URL)
+| Credential | Environment Variable |
+|---|---|
+| Phone Number ID | META_WHATSAPP_PHONE_NUMBER_ID |
+| Business Account ID | META_WHATSAPP_BUSINESS_ACCOUNT_ID |
+| System User Token | META_WHATSAPP_ACCESS_TOKEN |
+| App Secret | META_APP_SECRET |
 
-**Option A: ngrok tunnel (development)**
+#### Step 3 -- Register your webhook
+
+For local development, expose your backend with ngrok:
 
 ```bash
-# Install ngrok: https://ngrok.com/download
 ngrok http 8000
 # Copy the https://xxxxx.ngrok-free.app URL
 ```
 
-Set in `backend/.env`:
+In backend/.env:
+
 ```
 WEBHOOK_BASE_URL=https://xxxxx.ngrok-free.app
-META_WHATSAPP_VERIFY_TOKEN=choose_any_secret_string
+META_WHATSAPP_VERIFY_TOKEN=any_secret_string_you_choose
 ```
 
-**In Meta Developer Console:**
-1. WhatsApp → Configuration → Webhooks
-2. **Callback URL**: `https://xxxxx.ngrok-free.app/api/v1/webhooks/whatsapp`
-3. **Verify Token**: same value as `META_WHATSAPP_VERIFY_TOKEN`
-4. Click **Verify and Save**
-5. Subscribe to **messages** field
+In Meta Developer Console -> WhatsApp -> Configuration -> Webhooks:
+- Callback URL: https://xxxxx.ngrok-free.app/api/v1/webhooks/whatsapp
+- Verify Token: same as META_WHATSAPP_VERIFY_TOKEN
+- Subscribe to messages field
 
-### Step 4 — Test with Meta test number
-
-Meta provides a free test number and up to 5 authorized recipient numbers.
-
-1. WhatsApp → API Setup → **To** field: add your personal number
-2. Click **Send message** to send a test template
-3. Reply from your phone — check backend logs for the webhook event
-4. Verify AI response arrives via WhatsApp
-
-> **Trial restriction:** The test number can only message authorized recipients. Add up to 5 phone numbers in the dashboard.
-
-### Webhook URL reference
+#### Webhook reference
 
 | Purpose | URL |
 |---|---|
-| Verification (GET) | `GET /api/v1/webhooks/whatsapp` |
-| Inbound messages (POST) | `POST /api/v1/webhooks/whatsapp` |
-| Provider status | `GET /api/v1/webhooks/status` |
-| Webhook URL hints | `GET /api/v1/integrations/public/webhook-urls` |
+| Verification GET | GET /api/v1/webhooks/whatsapp |
+| Inbound messages | POST /api/v1/webhooks/whatsapp |
+| Provider health | GET /api/v1/webhooks/status |
 
 ---
 
-## Exotel Voice Setup (India)
+### Tone Voice API
 
-### Step 1 — Create Exotel account
+Handles inbound and outbound phone calls -- AI answers and qualifies callers in real time.
 
-1. Sign up at https://my.exotel.com/
-2. Trial accounts get test credits and a virtual number
-3. Full trial setup: https://docs.exotel.com/business-phone-system/create-a-trial-account
+Tone is a developer-first AI voice telephony platform purpose-built for AI phone agents.
 
-### Step 2 — Get credentials
+#### Step 1 -- Create a Tone account
 
-From Exotel dashboard:
-- **Account SID**: shown in dashboard header → `EXOTEL_ACCOUNT_SID`
-- **API Key + Token**: Settings → API → Create new key → `EXOTEL_API_KEY`, `EXOTEL_API_TOKEN`
-- **Base URL**: `https://api.exotel.com/v1/Accounts/{YOUR_ACCOUNT_SID}` → `EXOTEL_API_BASE_URL`
-- **ExoPhone**: Buy/assign a DID number → `EXOTEL_CALLER_ID`
+1. Sign up at https://usetone.ai -- no KYC required for test mode
+2. Go to Dashboard -> Developer -> API Keys -> New Key
+   - Environment: test (sandbox -- no real calls, no billing)
+   - Scopes: write
+   - Key format: tone_test_... (test) or tone_live_... (production)
 
-### Step 3 — Configure inbound call routing
+#### Step 2 -- Create an agent and allocate a number
 
-1. Exotel Dashboard → **Apps** → Create App
-2. Set **App URL** to: `https://your-public-url.com/api/v1/webhooks/exotel/inbound`
-3. Assign the App to your ExoPhone number
-4. Set `EXOTEL_APP_OR_FLOW_URL` in `.env`
+```bash
+# 1. Create an agent via API or dashboard
+POST https://api.usetone.ai/v1/agents
 
-### Step 4 — Voice AI / AgentStream (bidirectional streaming)
+# 2. Allocate a sandbox number to that agent
+POST https://api.usetone.ai/v1/numbers
+Body: {"series": "regular", "agentId": "<your_agent_id>"}
+```
 
-For real-time AI voice conversations:
+#### Step 3 -- Register your webhook
 
-1. Deploy a WebSocket server that implements Exotel's AgentStream protocol
-   - Docs: https://developer.exotel.com/docs/agentstream/connect-voice-ai
-   - The server receives audio frames, runs STT, calls AI, runs TTS, sends audio back
-2. Set `EXOTEL_STREAM_URL=wss://your-server.com/stream`
-3. Exotel will connect the call to your WebSocket for bidirectional audio
+```bash
+POST https://api.usetone.ai/v1/integrations/webhooks
+Body: {
+  "url": "https://your-tunnel.ngrok-free.app/api/v1/webhooks/tone",
+  "events": ["call.initiated", "call.answered", "call.completed", "call.failed"]
+}
+```
 
-> **Trial restriction:** AgentStream / bidirectional streaming may require an approved Exotel account. With a trial account, the standard ExoML flow (`/webhooks/exotel/inbound` → `process`) works for basic AI voice interactions.
+Copy the whsec_... secret from the response into TONE_WEBHOOK_SECRET -- it is shown once only.
 
-### Webhook URL reference
+#### Step 4 -- Update your .env
+
+```bash
+TELEPHONY_PROVIDER=tone
+TONE_API_KEY=tone_test_...
+TONE_AGENT_ID=<your_agent_id>
+TONE_NUMBER_ID=<your_number_id>
+TONE_WEBHOOK_SECRET=whsec_...
+TONE_VOICE_ENABLED=true
+```
+
+#### Test mode magic numbers (no real carrier needed)
+
+| Number | Behaviour |
+|---|---|
+| +915555000001 | Answered 45s canned summary |
+| +915555000002 | Busy |
+| +915555000003 | No answer |
+| +915555000004 | Voicemail |
+| +915555000005 | DND blocks promotional calls |
+| +915555000006 | Answered then opts out |
+
+Going live = swap TONE_API_KEY from tone_test_... to tone_live_... -- nothing else changes.
+
+#### Webhook reference
 
 | Purpose | URL |
 |---|---|
-| Inbound call | `POST /api/v1/webhooks/exotel/inbound` |
-| AI voice loop | `POST /api/v1/webhooks/exotel/process` |
-| Call status | `POST /api/v1/webhooks/exotel/status` |
-| Escalation outcome | `POST /api/v1/webhooks/exotel/dial-status` |
-| Place outbound call | `POST /api/v1/webhooks/exotel/call` (auth required) |
+| Inbound and status events | POST /api/v1/webhooks/tone |
+| Place outbound call | POST /api/v1/webhooks/tone/call (auth required) |
+
+---
+
+### HubSpot CRM (optional)
+
+1. Create a Private App in HubSpot https://app.hubspot.com/ with crm.objects.contacts.write scope
+2. Copy the token -> HUBSPOT_ACCESS_TOKEN
+3. Copy your Portal ID -> HUBSPOT_PORTAL_ID
+
+### Google Calendar (optional)
+
+1. Enable Google Calendar API in Google Cloud Console https://console.cloud.google.com/
+2. Create OAuth 2.0 credentials -> download credentials.json
+3. Set path in .env: GOOGLE_CALENDAR_CREDENTIALS_JSON
 
 ---
 
 ## Environment Variables Reference
 
 ```bash
-# ── Meta WhatsApp ──────────────────────────────────────────────────────────
+# Application
+APP_ENV=development
+APP_SECRET_KEY=change_me
+DEBUG=true
+
+# Database
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/ai_employee_db
+REDIS_URL=redis://localhost:6379/0
+
+# Google / Gemini AI
+GOOGLE_API_KEY=                      # From Google AI Studio
+
+# Meta WhatsApp
 META_WHATSAPP_ACCESS_TOKEN=          # System user permanent token
 META_WHATSAPP_PHONE_NUMBER_ID=       # Phone Number ID from Meta console
 META_WHATSAPP_BUSINESS_ACCOUNT_ID=   # Business Account ID
-META_GRAPH_API_VERSION=v20.0         # Graph API version (update when Meta releases new)
-META_WHATSAPP_VERIFY_TOKEN=          # Your chosen webhook verify token
+META_GRAPH_API_VERSION=v20.0
+META_WHATSAPP_VERIFY_TOKEN=          # Your chosen verify token
 META_APP_SECRET=                     # App Secret for signature verification
 WHATSAPP_ENABLED=true
 
-#Exotel were
+# Telephony Provider
+TELEPHONY_PROVIDER=tone              # tone (default) | exotel
 
-# ── Public URLs ───────────────────────────────────────────────────────────
+# Tone Voice
+TONE_API_BASE_URL=https://api.usetone.ai
+TONE_API_KEY=                        # tone_test_... or tone_live_...
+TONE_AGENT_ID=                       # Tone agent ID
+TONE_NUMBER_ID=                      # Tone phone-number ID
+TONE_WEBHOOK_SECRET=                 # whsec_... signing secret
+TONE_VOICE_ENABLED=true
+
+# Escalation
+ESCALATION_PHONE=                    # Human fallback number
+TEAM_WHATSAPP_PHONE=                 # Alert number for hot leads
+
+# Public URLs
 PUBLIC_BASE_URL=http://localhost:8000
-WEBHOOK_BASE_URL=                    # Set to ngrok/production URL for webhooks
+WEBHOOK_BASE_URL=                    # ngrok/production HTTPS URL
+
+# CRM and Calendar
+HUBSPOT_ACCESS_TOKEN=
+HUBSPOT_PORTAL_ID=
+GOOGLE_CALENDAR_CREDENTIALS_JSON=
+
+# JWT Auth
+JWT_SECRET_KEY=change_me_in_production
+ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
 ---
@@ -223,35 +460,79 @@ cd backend
 python -m pytest tests/ -v
 ```
 
-Tests use mocked HTTP — **no real API calls, no real messages, no real calls**.
+All tests use mocked HTTP -- no real API calls, no real messages, no real calls made.
 
 ```bash
-# Run specific suites
 python -m pytest tests/test_meta_whatsapp.py -v   # WhatsApp tests
-python -m pytest tests/test_exotel_voice.py -v    # Exotel tests
+python -m pytest tests/test_tone_voice.py -v      # Tone Voice tests
 ```
 
 ---
 
-## Database Migration
+## Database Schema
 
-New columns added (all nullable, safe on existing DBs):
+```mermaid
+erDiagram
+    BUSINESSES ||--o{ AGENTS : owns
+    BUSINESSES ||--o{ CUSTOMERS : has
+    BUSINESSES ||--o{ CONVERSATIONS : has
+    CUSTOMERS ||--o{ LEADS : generates
+    CUSTOMERS ||--o{ CONVERSATIONS : participates
+    LEADS ||--o{ APPOINTMENTS : triggers
+    CONVERSATIONS ||--o{ MESSAGES : contains
+
+    BUSINESSES {
+        uuid id PK
+        string name
+        string industry
+        string timezone
+    }
+
+    CUSTOMERS {
+        uuid id PK
+        string full_name
+        string phone
+        string email
+        json preferences
+        string crm_id
+    }
+
+    LEADS {
+        uuid id PK
+        string status
+        string score
+        float budget
+        json requirements
+    }
+
+    MESSAGES {
+        uuid id PK
+        string channel
+        string provider_message_id
+        string content
+        string direction
+    }
+```
+
+### Recent Migrations
 
 | Table | Column | Purpose |
 |---|---|---|
-| `messages` | `provider_message_id` | Deduplication (Meta wamid) |
-| `messages` | `channel` | whatsapp / phone / web |
-| `calls` | `provider_call_sid` | Exotel call SID |
-| `calls` | `provider` | exotel / mock |
-| `agents` | `whatsapp_phone_number_id` | Meta Phone Number ID for routing |
+| messages | provider_message_id | Deduplication Meta wamid or Tone call ID |
+| messages | channel | whatsapp / voice / web |
+| calls | provider_call_sid | Tone call SID |
+| calls | provider | tone / exotel / mock |
+| agents | whatsapp_phone_number_id | Meta Phone Number ID for routing |
 
 Run migration:
+
 ```bash
 cd backend
 python app/database/migrations/0002_meta_exotel_provider_columns.py
 ```
 
 Rollback:
+
 ```bash
 python app/database/migrations/0002_meta_exotel_provider_columns.py --downgrade
 ```
@@ -260,49 +541,95 @@ python app/database/migrations/0002_meta_exotel_provider_columns.py --downgrade
 
 ## Production Deployment Checklist
 
-### Before going live with real businesses
+### Meta WhatsApp
 
-**Meta WhatsApp:**
 - [ ] Complete Meta Business Verification
-- [ ] Apply for and receive approved message templates
-- [ ] Register a permanent phone number (not the test number)
-- [ ] Set `META_APP_SECRET` to enable X-Hub-Signature-256 validation
-- [ ] Set `PUBLIC_BASE_URL` / `WEBHOOK_BASE_URL` to your production HTTPS domain
-- [ ] Subscribe your WABA to the `messages` webhook field
+- [ ] Approved message templates registered
+- [ ] Permanent production phone number registered (not the test number)
+- [ ] META_APP_SECRET set to enable X-Hub-Signature-256 validation
+- [ ] WEBHOOK_BASE_URL points to your production HTTPS domain
+- [ ] Subscribed to the messages webhook field in Meta console
 
-**Exotel Voice:**
-- [ ] Upgrade from trial to paid account for production use
-- [ ] Purchase permanent ExoPhone DID numbers
-- [ ] Configure call recording permissions if needed
-- [ ] Set up AgentStream WebSocket server for real-time AI audio
+### Tone Voice
 
-**Security:**
-- [ ] Rotate all credentials that were ever in `.env` committed to git
-- [ ] Use a secrets manager (AWS Secrets Manager, GCP Secret Manager) in production
-- [ ] Set `DEBUG=false` in production
-- [ ] Set `APP_ENV=production` — enables strict signature validation
+- [ ] Swap TONE_API_KEY to tone_live_...
+- [ ] KYC completed for Tone production account
+- [ ] Production webhook URL registered in Tone dashboard
+- [ ] Escalation phone numbers verified
 
---
+### Security
 
-## Common Errors
+- [ ] Rotate any credentials that were ever committed to git
+- [ ] Use a secrets manager in production
+- [ ] DEBUG=false in production
+- [ ] APP_ENV=production -- enforces strict signature validation
+- [ ] TLS/HTTPS on all webhook endpoints
+
+---
+
+## Troubleshooting
 
 | Error | Fix |
 |---|---|
-| `META_WHATSAPP_ACCESS_TOKEN not set` | Add token to `.env`, set `WHATSAPP_ENABLED=true` |
-| `Invalid signature` on webhook | Check `META_APP_SECRET` matches App Secret in Meta console |
-| `Verify token mismatch` | Check `META_WHATSAPP_VERIFY_TOKEN` matches what you entered in Meta console |
-| Exotel `401 Unauthorized` | Check API Key and Token; verify Basic Auth format |
-| Exotel `400` on call | ExoPhone (caller ID) may not be assigned to your account |
-| `No business found` in webhook | Set `whatsapp_phone_number_id` on your Agent record in DB |
-| Mock client in logs | Provider credentials missing — app falls back to mock automatically |
+| META_WHATSAPP_ACCESS_TOKEN not set | Add token to .env and set WHATSAPP_ENABLED=true |
+| Invalid signature on WhatsApp webhook | Check META_APP_SECRET matches Meta console App Secret |
+| Verify token mismatch | META_WHATSAPP_VERIFY_TOKEN must match what you entered in Meta console |
+| Tone 401 Unauthorized | Verify TONE_API_KEY format -- tone_test_... or tone_live_... |
+| Tone webhook 403 Forbidden | TONE_WEBHOOK_SECRET mismatch -- copy the whsec_... exactly as shown once |
+| No business found in webhook | Set whatsapp_phone_number_id on your Agent record in DB |
+| Mock client in logs | Provider credentials missing -- app gracefully falls back to mock mode |
+| Calendar booking fails | Run OAuth flow: python app/integrations/google_calendar.py --auth |
 
-----
+---
 
-## Architecture Decision
+## Architecture Decisions
 
-- **No Twilio SDK** — removed from `requirements.txt`. All telephony via Exotel REST API over `httpx`.
-- **Provider adapters** — `WhatsAppClientBase` / `VoiceClientBase` interfaces let you swap providers without changing orchestrator code.
-- **Graceful degradation** — missing credentials → mock mode, not a crash.
-- **Signature validation** — Meta X-Hub-Signature-256 validated on every POST; skipped in DEBUG mode only.
-- **Deduplication** — in-process wamid set prevents duplicate AI replies from webhook retries.
-- **DB backward-compatible** — `twilio_call_sid` kept for existing rows; new `provider_call_sid` used by Exotel.
+| Decision | Rationale |
+|---|---|
+| LangGraph orchestrator | Stateful graph-based agent routing with full memory persistence |
+| Provider adapters | WhatsAppClientBase and VoiceClientBase let you swap providers without touching orchestrator code |
+| Graceful degradation | Missing credentials go to mock mode not a crash -- safe for development |
+| Signature validation | Meta X-Hub-Signature-256 and Tone HMAC on every POST; skipped in DEBUG mode only |
+| Deduplication | In-process wamid and call-ID set prevents duplicate AI replies from webhook retries |
+| pgvector RAG | Knowledge base stored as vector embeddings for semantic FAQ retrieval |
+| DB backward-compatible | Legacy columns kept; new provider_call_sid column used for Tone |
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| AI / LLM | Google Gemini via Google AI Studio |
+| Orchestration | LangGraph -- stateful multi-agent graphs |
+| Backend | FastAPI + Python 3.11 |
+| Frontend | Next.js 15 + TypeScript |
+| Database | PostgreSQL 15 + pgvector |
+| Cache / Queue | Redis |
+| Voice | Tone Voice API |
+| Messaging | Meta WhatsApp Cloud API |
+| CRM | HubSpot |
+| Calendar | Google Calendar API |
+| Containerisation | Docker + Docker Compose |
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: git checkout -b feature/your-feature
+3. Commit: git commit -m "feat: add your feature"
+4. Push: git push origin feature/your-feature
+5. Open a Pull Request
+
+---
+
+## License
+
+MIT -- see LICENSE for details.
+
+---
+
+Built with love by SurinderTech -- https://github.com/SurinderTech
+
+Operator AI -- Your AI workforce, always on.
