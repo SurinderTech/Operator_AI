@@ -4,7 +4,7 @@
 
 <br /><br />
 
-<img src="assets/ai-employee.gif" alt="Operator AI in action" width="100%" />
+<img src="assets/c4cbe309-153b-4ce8-93d3-24ffc90bdef6.gif" alt="Operator AI in action" width="100%" />
 
 </div>
 
