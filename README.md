@@ -37,7 +37,7 @@ Every growing business faces the same brutal reality:
 
 ---
 
-## What is Operator AI?
+## What is Operator AI
 
 Operator AI is a **multi-channel AI operator platform** that deploys intelligent agents on behalf of your business.
 
