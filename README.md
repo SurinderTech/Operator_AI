@@ -1,6 +1,5 @@
 <div align="center">
 
-<img src="assets/banner.jpg" alt="Operator AI Banner" width="100%" />
 
 <br /><br />
 
