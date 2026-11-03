@@ -153,7 +153,7 @@ async def test_initiate_call_raises_on_api_error(tone_client):
         mock_client_instance.__aexit__ = AsyncMock(return_value=False)
         mock_cls.return_value = mock_client_instance
 
-        with pytest.raises(RuntimeError, match="Tone API 422"):
+        with pytest.raises(Exception, match="Tone API 422"):
             await tone_client._request("POST", "calls", json={})
 
 
@@ -239,8 +239,8 @@ def test_webhook_signature_rotation(tone_client):
     assert tone_client.verify_webhook_signature(raw_body, timestamp, multi_sig) is True
 
 
-def test_webhook_no_secret_permissive(tone_client):
-    """When no secret is configured, verification should pass permissively."""
+def test_webhook_no_secret_fails_closed():
+    """When no secret is configured, verification must return False (fail-closed)."""
     from app.integrations.telephony.tone_client import ToneVoiceClient
     client = ToneVoiceClient(
         api_key=FAKE_API_KEY,
@@ -248,8 +248,8 @@ def test_webhook_no_secret_permissive(tone_client):
         number_id=FAKE_NUMBER_ID,
         webhook_secret=None,
     )
-    # Should return True even with garbage signature
-    assert client.verify_webhook_signature(b"{}", "12345", "v1=garbage") is True
+    # Must reject even a syntactically valid signature when no secret is set
+    assert client.verify_webhook_signature(b"{}", str(int(time.time())), "v1=garbage") is False
 
 
 # ---------------------------------------------------------------------------
@@ -291,8 +291,14 @@ def test_get_tone_client_force_mock():
 def test_get_tone_client_no_creds_returns_mock():
     """Without TONE_VOICE_ENABLED=true + creds, factory returns mock."""
     from app.integrations.telephony.tone_client import MockToneClient, get_tone_client
-    client = get_tone_client(force_mock=False)
-    # Default settings have TONE_VOICE_ENABLED=False so mock is expected
+    with patch("app.integrations.telephony.tone_client.settings") as mock_settings:
+        mock_settings.TONE_VOICE_ENABLED = False
+        mock_settings.TONE_API_KEY = ""
+        mock_settings.TONE_AGENT_ID = ""
+        mock_settings.TONE_NUMBER_ID = ""
+        mock_settings.TONE_API_BASE_URL = "https://api.usetone.ai"
+        mock_settings.TONE_WEBHOOK_SECRET = ""
+        client = get_tone_client(force_mock=False)
     assert isinstance(client, MockToneClient)
 
 

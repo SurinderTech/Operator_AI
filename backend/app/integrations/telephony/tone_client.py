@@ -18,11 +18,29 @@ import uuid
 from typing import Any
 
 import httpx
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
 from app.core.logging import logger
 from app.integrations.telephony.voice_base import VoiceClientBase
+
+
+# ---------------------------------------------------------------------------
+# Custom exception — distinguishes permanent 4xx errors from transient faults
+# ---------------------------------------------------------------------------
+
+class ToneClientError(RuntimeError):
+    """Permanent client-side error (4xx). Should not be retried."""
+    def __init__(self, status_code: int, body: str) -> None:
+        super().__init__(f"Tone API {status_code}: {body}")
+        self.status_code = status_code
+
+
+class ToneServerError(RuntimeError):
+    """Transient server-side error (5xx). Safe to retry."""
+    def __init__(self, status_code: int, body: str) -> None:
+        super().__init__(f"Tone API {status_code}: {body}")
+        self.status_code = status_code
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +97,12 @@ class ToneVoiceClient(VoiceClientBase):
 
     # -- helpers ---------------------------------------------------------------
 
-    @retry(stop=stop_after_attempt(2), wait=wait_exponential(min=1, max=4), reraise=True)
+    @retry(
+        retry=retry_if_exception_type((httpx.TransportError, httpx.TimeoutException, ToneServerError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=8),
+        reraise=True,
+    )
     async def _request(
         self,
         method: str,
@@ -95,10 +118,17 @@ class ToneVoiceClient(VoiceClientBase):
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.request(method, url, headers=headers, json=json)
 
-        if resp.status_code >= 400:
+        if 400 <= resp.status_code < 500:
+            # Permanent client error — do NOT retry (auth, validation, not-found, etc.)
             body = resp.text
-            logger.error(f"[Tone] API error {resp.status_code} at {url}: {body}")
-            raise RuntimeError(f"Tone API {resp.status_code}: {body}")
+            logger.error(f"[Tone] Client error {resp.status_code} at {url}: {body}")
+            raise ToneClientError(resp.status_code, body)
+
+        if resp.status_code >= 500:
+            # Transient server error — tenacity will retry
+            body = resp.text
+            logger.warning(f"[Tone] Server error {resp.status_code} at {url}: {body}")
+            raise ToneServerError(resp.status_code, body)
 
         return resp.json() if resp.text else {}
 
@@ -194,8 +224,13 @@ class ToneVoiceClient(VoiceClientBase):
         Reject if timestamp age exceeds 300 seconds.
         """
         if not self._webhook_secret:
-            logger.warning("[Tone] No TONE_WEBHOOK_SECRET configured -- skipping sig check.")
-            return True  # permissive when unconfigured (dev/test mode)
+            # Fail closed: an unconfigured secret is a misconfiguration, not a pass.
+            # In production this prevents unsigned webhooks from being accepted silently.
+            logger.error(
+                "[Tone] TONE_WEBHOOK_SECRET is not configured — "
+                "rejecting webhook to prevent unauthenticated access."
+            )
+            return False
 
         # Reject stale deliveries
         try:

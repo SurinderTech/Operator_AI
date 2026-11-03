@@ -65,6 +65,15 @@ class Settings(BaseSettings):
     EXOTEL_APP_OR_FLOW_URL: str = ""   # Exotel App URL for inbound call routing
     EXOTEL_VOICE_ENABLED: bool = True  # Set false to disable voice entirely
 
+    # ── Tone Voice (primary telephony provider) ──────────────────────────
+    # Official docs: https://docs.usetone.ai/
+    TONE_VOICE_ENABLED: bool = False               # Set true to activate real Tone calls
+    TONE_API_KEY: str = ""                         # tone_test_... (sandbox) or tone_live_... (prod)
+    TONE_AGENT_ID: str = ""                        # Tone agent ID for managed calls
+    TONE_NUMBER_ID: str = ""                       # Tone phone-number ID to dial from
+    TONE_API_BASE_URL: str = "https://api.usetone.ai"  # Override only if needed
+    TONE_WEBHOOK_SECRET: str = ""                  # whsec_... signing secret for inbound events
+
     # ── Escalation ───────────────────────────────────────────────────
     # Phone number AI routes to when escalating to a human
     ESCALATION_PHONE: str = ""
@@ -125,6 +134,18 @@ class Settings(BaseSettings):
                     "EXOTEL_API_TOKEN", "EXOTEL_API_BASE_URL"):
             if not getattr(self, key):
                 missing.append(key)
+        return missing
+
+    def validate_tone_config(self) -> list[str]:
+        """Return list of missing config keys for Tone. Empty list = all good."""
+        if not self.TONE_VOICE_ENABLED:
+            return []
+        missing = []
+        for key in ("TONE_API_KEY", "TONE_AGENT_ID", "TONE_NUMBER_ID"):
+            if not getattr(self, key):
+                missing.append(key)
+        if not self.TONE_WEBHOOK_SECRET:
+            missing.append("TONE_WEBHOOK_SECRET")
         return missing
 
 
